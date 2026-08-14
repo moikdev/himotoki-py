@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 # Default path for JMdictDB CSV files
 DEFAULT_DATA_PATH = Path(__file__).parent.parent.parent / "data"
 
+# SQLite has a hard limit on the number of host parameters per statement
+# (defaults to 999). Batch IN-clause queries to stay well below it.
+_SQLITE_MAX_VARS_PER_QUERY = 900
+
 
 # Cached data from CSV files
 _pos_index: Optional[Dict[str, Tuple[int, str]]] = None
@@ -718,55 +722,57 @@ def _clear_reading_index():
 
 def _prefetch_entry_data(session, seqs: List[int]) -> Dict[int, Dict]:
     """
-    Pre-fetch all data needed for conjugation in a single batch.
+    Pre-fetch all data needed for conjugation in batches.
     Returns dict mapping seq -> {posi, readings, all_readings}
     """
-    # Fetch POS for all entries
-    pos_rows = session.query(SenseProp.seq, SenseProp.text).filter(
-        SenseProp.tag == 'pos',
-        SenseProp.seq.in_(seqs)
-    ).all()
-    
-    pos_by_seq = {}
-    for seq, text in pos_rows:
-        if seq not in pos_by_seq:
-            pos_by_seq[seq] = set()
-        pos_by_seq[seq].add(text)
-    
-    # Fetch conjugatable kanji readings
-    kanji_rows = session.query(
-        KanjiText.seq, KanjiText.text, KanjiText.ord, KanjiText.conjugate_p
-    ).filter(KanjiText.seq.in_(seqs)).all()
-    
-    # Fetch conjugatable kana readings
-    kana_rows = session.query(
-        KanaText.seq, KanaText.text, KanaText.ord, KanaText.conjugate_p
-    ).filter(KanaText.seq.in_(seqs)).all()
-    
+    pos_by_seq: Dict[int, Set[str]] = {}
+    kanji_rows: List[Tuple[int, str, int, bool]] = []
+    kana_rows: List[Tuple[int, str, int, bool]] = []
+
+    for i in range(0, len(seqs), _SQLITE_MAX_VARS_PER_QUERY):
+        chunk = seqs[i:i + _SQLITE_MAX_VARS_PER_QUERY]
+
+        # Fetch POS for this chunk
+        pos_rows = session.query(SenseProp.seq, SenseProp.text).filter(
+            SenseProp.tag == 'pos',
+            SenseProp.seq.in_(chunk)
+        ).all()
+        for seq, text in pos_rows:
+            pos_by_seq.setdefault(seq, set()).add(text)
+
+        # Fetch conjugatable kanji readings for this chunk
+        kanji_rows.extend(session.query(
+            KanjiText.seq, KanjiText.text, KanjiText.ord, KanjiText.conjugate_p
+        ).filter(KanjiText.seq.in_(chunk)).all())
+
+        # Fetch conjugatable kana readings for this chunk
+        kana_rows.extend(session.query(
+            KanaText.seq, KanaText.text, KanaText.ord, KanaText.conjugate_p
+        ).filter(KanaText.seq.in_(chunk)).all())
+
     # Build entry data dict
     entry_data = {seq: {'posi': list(pos_by_seq.get(seq, [])), 'readings': [], 'all_readings': set()} for seq in seqs}
-    
+
     for seq, text, ord_num, conjugate_p in kanji_rows:
         entry_data[seq]['all_readings'].add(text)
         if conjugate_p:
             entry_data[seq]['readings'].append((text, ord_num, 1))
-    
+
     for seq, text, ord_num, conjugate_p in kana_rows:
         entry_data[seq]['all_readings'].add(text)
         if conjugate_p:
             entry_data[seq]['readings'].append((text, ord_num, 0))
-    
+
     # Fallback: if no conjugatable readings, use all readings
     for seq in seqs:
         if not entry_data[seq]['readings']:
-            # Use all readings as fallback
             for s, text, ord_num, _ in kanji_rows:
                 if s == seq:
                     entry_data[seq]['readings'].append((text, ord_num, 1))
             for s, text, ord_num, _ in kana_rows:
                 if s == seq:
                     entry_data[seq]['readings'].append((text, ord_num, 0))
-    
+
     return entry_data
 
 

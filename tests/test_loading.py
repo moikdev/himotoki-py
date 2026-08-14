@@ -540,6 +540,47 @@ class TestJMDictXMLParsing:
             assert kanji.text == "学校"
 
 
+class TestPrefetchEntryData:
+    """Tests for _prefetch_entry_data batching."""
+    
+    def test_prefetch_entry_data_batches_large_seq_lists(self, test_db, csv_data_path):
+        """Ensure _prefetch_entry_data splits large IN clauses to stay under SQLite's variable limit."""
+        from himotoki.loading.conjugations import _prefetch_entry_data, _SQLITE_MAX_VARS_PER_QUERY
+        from himotoki.loading.jmdict import load_entry
+        from lxml import etree
+        
+        entry_xml = """
+        <entry>
+            <ent_seq>2000010</ent_seq>
+            <k_ele><keb>食べる</keb></k_ele>
+            <r_ele><reb>たべる</reb></r_ele>
+            <sense><pos>v1</pos><gloss>to eat</gloss></sense>
+        </entry>
+        """
+        entry_elem = etree.fromstring(entry_xml)
+        
+        with session_scope() as session:
+            load_entry(session, entry_elem)
+            session.commit()
+            
+            # Force a tiny chunk size to exercise batching without needing thousands of rows.
+            import himotoki.loading.conjugations as conj_module
+            original_chunk = _SQLITE_MAX_VARS_PER_QUERY
+            conj_module._SQLITE_MAX_VARS_PER_QUERY = 2
+            
+            try:
+                # Ask for many non-existent seqs plus the real one. Without batching this
+                # would exceed SQLite's 999-parameter limit and raise OperationalError.
+                seqs = list(range(1001)) + [2000010]
+                result = _prefetch_entry_data(session, seqs)
+                
+                assert len(result) == len(seqs)
+                assert result[2000010]['posi'] == ['v1']
+                assert result[2000010]['all_readings'] == {'食べる', 'たべる'}
+            finally:
+                conj_module._SQLITE_MAX_VARS_PER_QUERY = original_chunk
+
+
 class TestIntegration:
     """Integration tests for loading pipeline."""
     
