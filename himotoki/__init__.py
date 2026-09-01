@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 from contextlib import contextmanager
 from typing import Optional, Tuple, List, Any, Generator
 
-__version__ = "0.3.1"
+__version__ = "0.3.2"
 
 # Logger for himotoki operations (users can attach handlers for request tracing)
 logger = logging.getLogger("himotoki")

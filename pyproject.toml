@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "himotoki"
-version = "0.3.1"
+version = "0.3.2"
 description = "Japanese Morphological Analyzer and Romanization tool - Python remake of ichiran"
 readme = "README.md"
 license = "MIT"

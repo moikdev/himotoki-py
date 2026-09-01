@@ -25,7 +25,7 @@ from himotoki.characters import romanize_word
 # Constants
 # =============================================================================
 
-VERSION = '0.3.1'
+VERSION = '0.3.2'
 CONJUGATION_ROOT = 'root'  # Marker for unconjugated (dictionary) form
 
 
