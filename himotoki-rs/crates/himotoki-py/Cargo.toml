@@ -1,0 +1,26 @@
+[package]
+name = "himotoki-py"
+version = "0.3.2"
+edition = "2021"
+description = "Python bindings for himotoki (PyO3)"
+license = "MIT"
+
+[lib]
+name = "himotoki_rs"
+crate-type = ["cdylib"]
+
+[features]
+default = []
+# Maturin/wheel builds enable this; plain cargo builds/tests link libpython.
+extension-module = ["pyo3/extension-module"]
+
+[dependencies]
+himotoki-core = { path = "../himotoki-core" }
+pyo3 = { version = "0.24", features = ["abi3-py39"] }
+pythonize = "0.24"
+serde_json = { workspace = true }
+rusqlite = { workspace = true }
+anyhow = { workspace = true }
+
+[package.metadata.maturin]
+name = "himotoki_rs"

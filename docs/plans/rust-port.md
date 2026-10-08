@@ -10,6 +10,19 @@ This document is the master plan. Each phase lists source files, target files,
 tasks, and an exit gate. The Python implementation is the oracle throughout —
 port file-by-file, keep names aligned, diff constantly.
 
+**Status (2025-10): all phases landed.**
+Phases 0–6: 633/633 golden inputs byte-identical for candidates/paths/output.
+Phase 7: `himotoki-py` PyO3 bindings (abi3 wheel, `himotoki_rs.analyze()` works).
+Phase 8: `himotoki-load` builds the full DB — `jmdict` + `conj` (primary &
+secondary) + `errata` subcommands. Full-build verification vs `data/himotoki.db`:
+all 9 table cardinalities identical (2,266,000 entries, 2,072,271 conjugations),
+all 2,051,284 generated conj entries identical as reading-sets, conj_prop
+histograms identical, conj_source_reading multiset identical, and every
+root-entry row byte-identical. Remaining golden diffs are generated-seq
+renumbering only (Python's own `imap_unordered` build is likewise
+nondeterministic). Phase 9: 319 → 43 ms/input; Rust now ~2.0× faster than
+Python on the 633-input corpus (27.2s vs 54.6s).
+
 ---
 
 ## 1. Goals & non-goals

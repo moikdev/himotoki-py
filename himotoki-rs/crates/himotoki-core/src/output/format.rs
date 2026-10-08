@@ -5,18 +5,13 @@ use serde_json::{json, Value};
 
 use crate::chars::romanize_word;
 use crate::output::meanings::{
-    conj_info_json, get_senses_json, get_senses_raw, get_senses_str,
-    word_info_reading_str,
+    conj_info_json, get_senses_json, get_senses_raw, get_senses_str, word_info_reading_str,
 };
 use crate::output::types::{special_conj_info, WordInfo, WordType};
 use crate::output::word_info::fill_segment_path;
 
 /// `word_info_gloss_json` — JSON dict for a WordInfo.
-pub fn word_info_gloss_json(
-    conn: &Connection,
-    word_info: &WordInfo,
-    root_only: bool,
-) -> Value {
+pub fn word_info_gloss_json(conn: &Connection, word_info: &WordInfo, root_only: bool) -> Value {
     let mut js = json!({
         "reading": word_info_reading_str(word_info),
         "text": word_info.text,
@@ -37,8 +32,11 @@ pub fn word_info_gloss_json(
     }
 
     if !word_info.components.is_empty() {
-        js["compound"] =
-            json!(word_info.components.iter().map(|wi| wi.text.clone()).collect::<Vec<_>>());
+        js["compound"] = json!(word_info
+            .components
+            .iter()
+            .map(|wi| wi.text.clone())
+            .collect::<Vec<_>>());
         js["components"] = json!(word_info
             .components
             .iter()
@@ -127,12 +125,7 @@ pub fn word_info_gloss_json(
             } else {
                 None
             };
-            let conj = conj_info_json(
-                conn,
-                seq,
-                ids.as_deref(),
-                word_info.true_text.as_deref(),
-            );
+            let conj = conj_info_json(conn, seq, ids.as_deref(), word_info.true_text.as_deref());
             if !conj.is_empty() {
                 js["conj"] = json!(conj);
             }
@@ -143,11 +136,7 @@ pub fn word_info_gloss_json(
 }
 
 /// `dict_segment` — segment + WordInfo fill, returns [(word_infos, score)].
-pub fn dict_segment(
-    conn: &Connection,
-    text: &str,
-    limit: usize,
-) -> Vec<(Vec<WordInfo>, f64)> {
+pub fn dict_segment(conn: &Connection, text: &str, limit: usize) -> Vec<(Vec<WordInfo>, f64)> {
     let results = crate::segment::segment_text(conn, text, None, limit);
     results
         .into_iter()

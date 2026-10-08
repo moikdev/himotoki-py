@@ -58,9 +58,8 @@ static DIGIT_TO_KANA: LazyLock<HashMap<i64, &'static str>> = LazyLock::new(|| {
     ]
 });
 
-static POWER_TO_KANA: LazyLock<HashMap<i64, &'static str>> = LazyLock::new(|| {
-    kmap![1 => "じゅう", 2 => "ひゃく", 3 => "せん", 4 => "まん"]
-});
+static POWER_TO_KANA: LazyLock<HashMap<i64, &'static str>> =
+    LazyLock::new(|| kmap![1 => "じゅう", 2 => "ひゃく", 3 => "せん", 4 => "まん"]);
 
 /// SPECIAL_COUNTER_OPTS: seq → {digit → opts}.
 /// opts: Flags(['g','r','h']) or Kana(string replacement).
@@ -100,12 +99,13 @@ static DAYS_KUN_READINGS: LazyLock<HashMap<i64, &'static str>> = LazyLock::new(|
     ]
 });
 
-static PEOPLE_KUN_READINGS: LazyLock<HashMap<i64, &'static str>> = LazyLock::new(|| {
-    kmap![1 => "ひとり", 2 => "ふたり"]
-});
+static PEOPLE_KUN_READINGS: LazyLock<HashMap<i64, &'static str>> =
+    LazyLock::new(|| kmap![1 => "ひとり", 2 => "ふたり"]);
 
 pub const EXTRA_COUNTER_IDS: &[i64] = &[1255430, 1606800]; // 月, 割
-pub const SKIP_COUNTER_IDS: &[i64] = &[2426510, 2220370, 2248360, 2423450, 2671670, 2735690, 2838543];
+pub const SKIP_COUNTER_IDS: &[i64] = &[
+    2426510, 2220370, 2248360, 2423450, 2671670, 2735690, 2838543,
+];
 
 /// seq → accepted COUNTER_SUFFIXES keys.
 pub static COUNTER_ACCEPTS: LazyLock<HashMap<i64, Vec<&'static str>>> = LazyLock::new(|| {
@@ -292,21 +292,61 @@ pub fn counter_rendaku(kana: &str, handakuten: bool) -> String {
     let rest: String = chars.collect();
     let h_to_p = |c: char| -> Option<char> {
         Some(match c {
-            'は' => 'ぱ', 'ひ' => 'ぴ', 'ふ' => 'ぷ', 'へ' => 'ぺ', 'ほ' => 'ぽ',
-            'ハ' => 'パ', 'ヒ' => 'ピ', 'フ' => 'プ', 'ヘ' => 'ペ', 'ホ' => 'ポ',
+            'は' => 'ぱ',
+            'ひ' => 'ぴ',
+            'ふ' => 'ぷ',
+            'へ' => 'ぺ',
+            'ほ' => 'ぽ',
+            'ハ' => 'パ',
+            'ヒ' => 'ピ',
+            'フ' => 'プ',
+            'ヘ' => 'ペ',
+            'ホ' => 'ポ',
             _ => return None,
         })
     };
     let voicing = |c: char| -> Option<char> {
         Some(match c {
-            'か' => 'が', 'き' => 'ぎ', 'く' => 'ぐ', 'け' => 'げ', 'こ' => 'ご',
-            'さ' => 'ざ', 'し' => 'じ', 'す' => 'ず', 'せ' => 'ぜ', 'そ' => 'ぞ',
-            'た' => 'だ', 'ち' => 'ぢ', 'つ' => 'づ', 'て' => 'で', 'と' => 'ど',
-            'は' => 'ば', 'ひ' => 'び', 'ふ' => 'ぶ', 'へ' => 'べ', 'ほ' => 'ぼ',
-            'カ' => 'ガ', 'キ' => 'ギ', 'ク' => 'グ', 'ケ' => 'ゲ', 'コ' => 'ゴ',
-            'サ' => 'ザ', 'シ' => 'ジ', 'ス' => 'ズ', 'セ' => 'ゼ', 'ソ' => 'ゾ',
-            'タ' => 'ダ', 'チ' => 'ヂ', 'ツ' => 'ヅ', 'テ' => 'デ', 'ト' => 'ド',
-            'ハ' => 'バ', 'ヒ' => 'ビ', 'フ' => 'ブ', 'ヘ' => 'ベ', 'ホ' => 'ボ',
+            'か' => 'が',
+            'き' => 'ぎ',
+            'く' => 'ぐ',
+            'け' => 'げ',
+            'こ' => 'ご',
+            'さ' => 'ざ',
+            'し' => 'じ',
+            'す' => 'ず',
+            'せ' => 'ぜ',
+            'そ' => 'ぞ',
+            'た' => 'だ',
+            'ち' => 'ぢ',
+            'つ' => 'づ',
+            'て' => 'で',
+            'と' => 'ど',
+            'は' => 'ば',
+            'ひ' => 'び',
+            'ふ' => 'ぶ',
+            'へ' => 'べ',
+            'ほ' => 'ぼ',
+            'カ' => 'ガ',
+            'キ' => 'ギ',
+            'ク' => 'グ',
+            'ケ' => 'ゲ',
+            'コ' => 'ゴ',
+            'サ' => 'ザ',
+            'シ' => 'ジ',
+            'ス' => 'ズ',
+            'セ' => 'ゼ',
+            'ソ' => 'ゾ',
+            'タ' => 'ダ',
+            'チ' => 'ヂ',
+            'ツ' => 'ヅ',
+            'テ' => 'デ',
+            'ト' => 'ド',
+            'ハ' => 'バ',
+            'ヒ' => 'ビ',
+            'フ' => 'ブ',
+            'ヘ' => 'ベ',
+            'ホ' => 'ボ',
             _ => return None,
         })
     };
@@ -451,11 +491,10 @@ pub fn counter_join(
                     result_counter = counter_rendaku(&result_counter, true);
                 }
             }
-            1000 | 10000 => {
-                if head == Some("ha") {
+            1000 | 10000
+                if head == Some("ha") => {
                     result_counter = counter_rendaku(&result_counter, true);
                 }
-            }
             _ => {}
         }
     }
@@ -488,9 +527,8 @@ pub fn init_counter_cache(conn: &Connection) -> rusqlite::Result<()> {
         return Ok(());
     }
     // counter seqs = pos:'ctr' + EXTRA - SKIP
-    let mut stmt = conn.prepare(
-        "SELECT DISTINCT seq FROM sense_prop WHERE tag='pos' AND text='ctr'",
-    )?;
+    let mut stmt =
+        conn.prepare_cached("SELECT DISTINCT seq FROM sense_prop WHERE tag='pos' AND text='ctr'")?;
     let mut ids: std::collections::HashSet<i64> = stmt
         .query_map([], |r| r.get::<_, i64>(0))?
         .collect::<Result<_, _>>()?;
@@ -511,9 +549,8 @@ pub fn init_counter_cache(conn: &Connection) -> rusqlite::Result<()> {
             "SELECT id, seq, text, ord, common, best_kana FROM kanji_text WHERE seq IN ({}) ORDER BY ord",
             placeholders
         );
-        let mut stmt = conn.prepare(&sql)?;
-        let params: Vec<rusqlite::types::Value> =
-            ids.iter().map(|i| (*i).into()).collect();
+        let mut stmt = conn.prepare_cached(&sql)?;
+        let params: Vec<rusqlite::types::Value> = ids.iter().map(|i| (*i).into()).collect();
         let rows = stmt.query_map(rusqlite::params_from_iter(params), |r| {
             Ok(KanjiTextRow {
                 id: r.get(0)?,
@@ -531,9 +568,8 @@ pub fn init_counter_cache(conn: &Connection) -> rusqlite::Result<()> {
             "SELECT seq, text FROM (SELECT seq, text, ROW_NUMBER() OVER (PARTITION BY seq ORDER BY ord) rn FROM kana_text WHERE seq IN ({})) WHERE rn=1",
             placeholders
         );
-        let mut kstmt = conn.prepare(&ksql)?;
-        let params2: Vec<rusqlite::types::Value> =
-            ids.iter().map(|i| (*i).into()).collect();
+        let mut kstmt = conn.prepare_cached(&ksql)?;
+        let params2: Vec<rusqlite::types::Value> = ids.iter().map(|i| (*i).into()).collect();
         let krows = kstmt.query_map(rusqlite::params_from_iter(params2), |r| {
             Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
         })?;
@@ -549,16 +585,19 @@ pub fn init_counter_cache(conn: &Connection) -> rusqlite::Result<()> {
                 .map(|s| s.to_string())
                 .or_else(|| primary_kana.get(&kt.seq).cloned())
                 .unwrap_or_default();
-            cache.entry(counter_text.clone()).or_default().push(CounterEntry {
-                counter_text,
-                counter_kana: pk,
-                source: Some(Reading::Kanji(kt.clone())),
-                ordinalp: is_ordinal,
-                common: kt.common,
-                digit_opts: SPECIAL_COUNTER_OPTS
-                    .get(&kt.seq)
-                    .map(|d| std::sync::Arc::new(d.clone())),
-            });
+            cache
+                .entry(counter_text.clone())
+                .or_default()
+                .push(CounterEntry {
+                    counter_text,
+                    counter_kana: pk,
+                    source: Some(Reading::Kanji(kt.clone())),
+                    ordinalp: is_ordinal,
+                    common: kt.common,
+                    digit_opts: SPECIAL_COUNTER_OPTS
+                        .get(&kt.seq)
+                        .map(|d| std::sync::Arc::new(d.clone())),
+                });
         }
     }
     let _ = COUNTER_CACHE.set(cache);
@@ -566,11 +605,7 @@ pub fn init_counter_cache(conn: &Connection) -> rusqlite::Result<()> {
 }
 
 /// `find_counter` — number_text + counter_text → CounterText list.
-pub fn find_counter(
-    conn: &Connection,
-    number_text: &str,
-    counter_text: &str,
-) -> Vec<CounterText> {
+pub fn find_counter(conn: &Connection, number_text: &str, counter_text: &str) -> Vec<CounterText> {
     if COUNTER_CACHE.get().is_none() {
         let _ = init_counter_cache(conn);
     }
@@ -613,7 +648,13 @@ pub fn find_counter(
         } else {
             let nk = number_to_kana(number_value, "");
             let foreign = seq.map(|s| COUNTER_FOREIGN.contains(&s)).unwrap_or(false);
-            counter_join(number_value, &nk, &args.counter_kana, args.digit_opts.as_deref(), foreign)
+            counter_join(
+                number_value,
+                &nk,
+                &args.counter_kana,
+                args.digit_opts.as_deref(),
+                foreign,
+            )
         };
         results.push(CounterText {
             text: format!("{}{}", number_text, counter_text),
@@ -641,7 +682,10 @@ pub fn find_counter_in_text(conn: &Connection, text: &str) -> Vec<(usize, usize,
         let mut number_end = start;
         while number_end < text_len {
             let ch = chars[number_end];
-            if KANJI_NUMBERS.contains_key(&ch) || DIGIT_VALUES.contains_key(&ch) || ch.is_ascii_digit() {
+            if KANJI_NUMBERS.contains_key(&ch)
+                || DIGIT_VALUES.contains_key(&ch)
+                || ch.is_ascii_digit()
+            {
                 number_end += 1;
             } else {
                 break;
@@ -675,8 +719,8 @@ pub fn calc_counter_score(counter: &CounterText) -> i64 {
     }
     let word_len = mora_length(&counter.text);
     let length_coeffs = [0i64, 1, 8, 24, 40, 60];
-    let coeff = if (word_len as usize) < length_coeffs.len() {
-        length_coeffs[word_len as usize]
+    let coeff = if word_len < length_coeffs.len() {
+        length_coeffs[word_len]
     } else {
         word_len as i64 * (length_coeffs[5] / 4)
     };

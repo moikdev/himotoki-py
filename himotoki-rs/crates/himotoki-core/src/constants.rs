@@ -273,12 +273,9 @@ pub fn suffix_description_seq(seq: i64) -> Option<&'static str> {
 // ============================================================================
 
 pub static POS_TAGS: &[&str] = &[
-    "n", "n-adv", "n-pref", "n-suf", "n-t",
-    "v1", "v1-s", "v5aru", "v5b", "v5g", "v5k", "v5k-s", "v5m", "v5n",
-    "v5r", "v5r-i", "v5s", "v5t", "v5u", "v5u-s", "v5uru", "vk", "vs",
-    "vs-i", "vs-s", "vz", "vi", "vt", "vs-c",
-    "adj-i", "adj-ix", "adj-na", "adj-no", "adj-pn", "adj-t", "adj-f",
-    "adv", "adv-to", "aux", "aux-v", "aux-adj",
-    "conj", "cop", "ctr", "exp", "int", "pn", "pref", "prt", "suf", "unc",
-    "uk", "arch", "male", "fem", "vulg", "hon", "hum", "col", "fam",
+    "n", "n-adv", "n-pref", "n-suf", "n-t", "v1", "v1-s", "v5aru", "v5b", "v5g", "v5k", "v5k-s",
+    "v5m", "v5n", "v5r", "v5r-i", "v5s", "v5t", "v5u", "v5u-s", "v5uru", "vk", "vs", "vs-i",
+    "vs-s", "vz", "vi", "vt", "vs-c", "adj-i", "adj-ix", "adj-na", "adj-no", "adj-pn", "adj-t",
+    "adj-f", "adv", "adv-to", "aux", "aux-v", "aux-adj", "conj", "cop", "ctr", "exp", "int", "pn",
+    "pref", "prt", "suf", "unc", "uk", "arch", "male", "fem", "vulg", "hon", "hum", "col", "fam",
 ];

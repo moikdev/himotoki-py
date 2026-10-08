@@ -42,27 +42,24 @@ pub fn word_info_from_word_match(
 
     if let Conj::Ids(conj_ids) = &word_match.conjugations {
         if let Some(conj_id) = conj_ids.first() {
-            if let Ok((from_seq,)) = conn.query_row(
-                "SELECT \"from\" FROM conjugation WHERE id = ?1",
-                [conj_id],
-                |r| Ok((r.get::<_, Option<i64>>(0)?,)),
-            ) {
-                if let Ok(ct) = conn.query_row(
-                    "SELECT conj_type FROM conj_prop WHERE conj_id = ?1 LIMIT 1",
-                    [conj_id],
-                    |r| r.get::<_, i64>(0),
-                ) {
+            if let Ok((from_seq,)) = conn
+                .prepare_cached("SELECT \"from\" FROM conjugation WHERE id = ?1")
+                .and_then(|mut s| s.query_row([conj_id], |r| Ok((r.get::<_, Option<i64>>(0)?,))))
+            {
+                if let Ok(ct) = conn
+                    .prepare_cached("SELECT conj_type FROM conj_prop WHERE conj_id = ?1 LIMIT 1")
+                    .and_then(|mut s| s.query_row([conj_id], |r| r.get::<_, i64>(0)))
+                {
                     conj_type_str = Some(conj_type_name(ct));
                 }
                 if let Some(fs) = from_seq {
                     source_text = match cache {
                         Some(c) => c.get_source_text(fs),
                         None => conn
-                            .query_row(
+                            .prepare_cached(
                                 "SELECT text FROM kanji_text WHERE seq = ?1 AND ord = 0 LIMIT 1",
-                                [fs],
-                                |r| r.get::<_, String>(0),
                             )
+                            .and_then(|mut s| s.query_row([fs], |r| r.get::<_, String>(0)))
                             .ok(),
                     };
                 }
@@ -141,18 +138,16 @@ pub fn word_info_from_segment(
                 source_text = match cache {
                     Some(c) => c.get_source_text(cd.from_seq),
                     None => conn
-                        .query_row(
+                        .prepare_cached(
                             "SELECT text FROM kanji_text WHERE seq = ?1 AND ord = 0 LIMIT 1",
-                            [cd.from_seq],
-                            |r| r.get::<_, String>(0),
                         )
+                        .and_then(|mut s| s.query_row([cd.from_seq], |r| r.get::<_, String>(0)))
                         .ok()
                         .or_else(|| {
-                            conn.query_row(
+                            conn.prepare_cached(
                                 "SELECT text FROM kana_text WHERE seq = ?1 AND ord = 0 LIMIT 1",
-                                [cd.from_seq],
-                                |r| r.get::<_, String>(0),
                             )
+                            .and_then(|mut s| s.query_row([cd.from_seq], |r| r.get::<_, String>(0)))
                             .ok()
                         }),
                 };
@@ -163,8 +158,7 @@ pub fn word_info_from_segment(
                 let cd2 = get_word_conj_data(conn, &Word::Simple(last.clone()));
                 if let Some(cd) = cd2.first() {
                     if let Some(prop) = &cd.prop {
-                        conj_type_str =
-                            Some(conj_type_name(prop.conj_type));
+                        conj_type_str = Some(conj_type_name(prop.conj_type));
                         conj_neg = prop.neg.unwrap_or(false);
                         conj_fml = prop.fml.unwrap_or(false);
                     }
@@ -184,8 +178,7 @@ pub fn word_info_from_segment(
             }
         }
 
-        let compound_texts: Vec<String> =
-            cw.components().iter().map(|s| s.to_string()).collect();
+        let compound_texts: Vec<String> = cw.components().iter().map(|s| s.to_string()).collect();
         let component_word_infos: Vec<WordInfo> = cw
             .words
             .iter()
@@ -221,9 +214,7 @@ pub fn word_info_from_segment(
                 .best_kana
                 .clone()
                 .filter(|s| !s.is_empty())
-                .unwrap_or_else(|| {
-                    get_matching_kana_for_kanji(conn, w.seq(), &r.text)
-                });
+                .unwrap_or_else(|| get_matching_kana_for_kanji(conn, w.seq(), &r.text));
             (WordType::Kanji, kana)
         }
         _ => (WordType::Kana, w.text().to_string()),
@@ -266,18 +257,16 @@ pub fn word_info_from_segment(
             source_text = match cache {
                 Some(c) => c.get_source_text(cd.from_seq),
                 None => conn
-                    .query_row(
+                    .prepare_cached(
                         "SELECT text FROM kanji_text WHERE seq = ?1 AND ord = 0 LIMIT 1",
-                        [cd.from_seq],
-                        |r| r.get::<_, String>(0),
                     )
+                    .and_then(|mut s| s.query_row([cd.from_seq], |r| r.get::<_, String>(0)))
                     .ok()
                     .or_else(|| {
-                        conn.query_row(
+                        conn.prepare_cached(
                             "SELECT text FROM kana_text WHERE seq = ?1 AND ord = 0 LIMIT 1",
-                            [cd.from_seq],
-                            |r| r.get::<_, String>(0),
                         )
+                        .and_then(|mut s| s.query_row([cd.from_seq], |r| r.get::<_, String>(0)))
                         .ok()
                     }),
             };
@@ -357,7 +346,11 @@ pub fn word_info_from_segment_list(
         type_: wi1.type_,
         text: wi1.text.clone(),
         kana: unique_kana,
-        seq: if seq_list.is_empty() { None } else { Some(seq_list) },
+        seq: if seq_list.is_empty() {
+            None
+        } else {
+            Some(seq_list)
+        },
         components: wi_list.clone(),
         alternative: true,
         score: wi1.score,

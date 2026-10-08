@@ -57,7 +57,7 @@ fn find_word_seq(conn: &Connection, text: &str, seqs: &[i64]) -> Vec<WordMatch> 
             "SELECT id, seq, text, ord, common, best_kanji FROM kana_text WHERE text = ?1 AND seq IN ({})",
             ph
         );
-        let mut stmt = match conn.prepare(&sql) {
+        let mut stmt = match conn.prepare_cached(&sql) {
             Ok(s) => s,
             Err(_) => return Vec::new(),
         };
@@ -83,7 +83,7 @@ fn find_word_seq(conn: &Connection, text: &str, seqs: &[i64]) -> Vec<WordMatch> 
             "SELECT id, seq, text, ord, common, best_kana FROM kanji_text WHERE text = ?1 AND seq IN ({})",
             ph
         );
-        let mut stmt = match conn.prepare(&sql) {
+        let mut stmt = match conn.prepare_cached(&sql) {
             Ok(s) => s,
             Err(_) => return Vec::new(),
         };
@@ -127,7 +127,7 @@ pub fn find_word_conj_of(conn: &Connection, text: &str, seqs: &[i64]) -> Vec<Wor
         extra_col, table, ph
     );
     let mut out: Vec<WordMatch> = Vec::new();
-    if let Ok(mut stmt) = conn.prepare(&sql) {
+    if let Ok(mut stmt) = conn.prepare_cached(&sql) {
         let mk = |kana: bool| {
             move |r: &rusqlite::Row| -> rusqlite::Result<WordMatch> {
                 if kana {
@@ -162,13 +162,15 @@ pub fn find_word_conj_of(conn: &Connection, text: &str, seqs: &[i64]) -> Vec<Wor
     let sql2 = format!(
         "SELECT t.id, t.seq, t.text, t.ord, t.common, t.{extra} FROM {table} t \
          JOIN conjugation c ON t.seq = c.seq WHERE t.text = ?1 AND c.\"from\" IN ({ph})",
-        table = table, extra = extra_col, ph = ph
+        table = table,
+        extra = extra_col,
+        ph = ph
     );
     // params: text + seqs
     params.clear();
     params.push(text.to_string().into());
     params.extend(seqs.iter().map(|s| (*s).into()));
-    if let Ok(mut stmt) = conn.prepare(&sql2) {
+    if let Ok(mut stmt) = conn.prepare_cached(&sql2) {
         let kana = is_kana(text);
         let rows = stmt.query_map(rusqlite::params_from_iter(params), move |r| {
             if kana {
@@ -211,10 +213,7 @@ type PartDef = (Vec<i64>, Option<usize>, bool);
 /// `def_simple_split` — generic (seq,len,conjugated) parts splitter.
 /// Unused by the built-in table but kept for API parity with splits.py.
 #[allow(dead_code)]
-fn def_simple_split(
-    score: f64,
-    parts: Vec<PartDef>,
-) -> SplitFn {
+fn def_simple_split(score: f64, parts: Vec<PartDef>) -> SplitFn {
     Box::new(move |conn: &Connection, reading: &Word| {
         let text: Vec<char> = reading.text().chars().collect();
         let mut offset = 0usize;
@@ -272,8 +271,14 @@ fn def_de_split(seq_a: i64, score: f64) -> SplitFn {
         }
         Some(SplitResult {
             parts: vec![
-                SplitPart { word: Word::Simple(main_words[0].clone()), text: main_text },
-                SplitPart { word: Word::Simple(de_words[0].clone()), text: de_text.into() },
+                SplitPart {
+                    word: Word::Simple(main_words[0].clone()),
+                    text: main_text,
+                },
+                SplitPart {
+                    word: Word::Simple(de_words[0].clone()),
+                    text: de_text.into(),
+                },
             ],
             score_bonus: score,
             modifiers: HashSet::new(),
@@ -302,8 +307,14 @@ fn def_toori_split(seq_a: i64, score: f64, seq_b: i64) -> SplitFn {
         }
         Some(SplitResult {
             parts: vec![
-                SplitPart { word: Word::Simple(main_words[0].clone()), text: main_text },
-                SplitPart { word: Word::Simple(toori_words[0].clone()), text: toori_text },
+                SplitPart {
+                    word: Word::Simple(main_words[0].clone()),
+                    text: main_text,
+                },
+                SplitPart {
+                    word: Word::Simple(toori_words[0].clone()),
+                    text: toori_text,
+                },
             ],
             score_bonus: score,
             modifiers: HashSet::new(),
@@ -320,8 +331,14 @@ fn do_split(seq_b: i64, score: f64) -> SplitFn {
         if !do_w.is_empty() && !rest.is_empty() {
             return Some(SplitResult {
                 parts: vec![
-                    SplitPart { word: Word::Simple(do_w[0].clone()), text: "ど".into() },
-                    SplitPart { word: Word::Simple(rest[0].clone()), text: rest_text },
+                    SplitPart {
+                        word: Word::Simple(do_w[0].clone()),
+                        text: "ど".into(),
+                    },
+                    SplitPart {
+                        word: Word::Simple(rest[0].clone()),
+                        text: rest_text,
+                    },
                 ],
                 score_bonus: score,
                 modifiers: HashSet::new(),
@@ -340,8 +357,14 @@ fn shi_split(seq_b: i64, score: f64) -> SplitFn {
         if !shi.is_empty() && !rest.is_empty() {
             return Some(SplitResult {
                 parts: vec![
-                    SplitPart { word: Word::Simple(shi[0].clone()), text: "し".into() },
-                    SplitPart { word: Word::Simple(rest[0].clone()), text: rest_text },
+                    SplitPart {
+                        word: Word::Simple(shi[0].clone()),
+                        text: "し".into(),
+                    },
+                    SplitPart {
+                        word: Word::Simple(rest[0].clone()),
+                        text: rest_text,
+                    },
                 ],
                 score_bonus: score,
                 modifiers: HashSet::new(),
@@ -360,145 +383,269 @@ fn build_split_map() -> HashMap<i64, SplitFn> {
 
     // -de expressions
     for (seq, seq_a) in [
-        (1163700, 1576150), (1611020, 1577100), (1004800, 1628530),
-        (2810720, 1004820), (1006840, 1006880), (1530610, 1530600),
-        (1245390, 1245290), (2719270, 1445430), (1189420, 2416780),
-        (1272220, 1592990), (1311360, 1311350), (1368500, 1368490),
-        (1395670, 1395660), (1417790, 1417780), (1454270, 1454260),
-        (1479100, 1679020), (1510140, 1680900), (1518550, 1529560),
-        (1531420, 1531410), (1597400, 1585205), (1679990, 2582460),
-        (1682060, 2085340), (1736650, 1611710), (1865020, 1590150),
-        (1878880, 2423450), (2126220, 1802920), (2136520, 2005870),
-        (2513590, 2513650), (2771850, 2563780), (2810800, 1587590),
-        (1343110, 1343100), (1270210, 1001640),
+        (1163700, 1576150),
+        (1611020, 1577100),
+        (1004800, 1628530),
+        (2810720, 1004820),
+        (1006840, 1006880),
+        (1530610, 1530600),
+        (1245390, 1245290),
+        (2719270, 1445430),
+        (1189420, 2416780),
+        (1272220, 1592990),
+        (1311360, 1311350),
+        (1368500, 1368490),
+        (1395670, 1395660),
+        (1417790, 1417780),
+        (1454270, 1454260),
+        (1479100, 1679020),
+        (1510140, 1680900),
+        (1518550, 1529560),
+        (1531420, 1531410),
+        (1597400, 1585205),
+        (1679990, 2582460),
+        (1682060, 2085340),
+        (1736650, 1611710),
+        (1865020, 1590150),
+        (1878880, 2423450),
+        (2126220, 1802920),
+        (2136520, 2005870),
+        (2513590, 2513650),
+        (2771850, 2563780),
+        (2810800, 1587590),
+        (1343110, 1343100),
+        (1270210, 1001640),
     ] {
         m.insert(seq, def_de_split(seq_a, 20.0));
     }
 
     // -通り expressions
     for (seq, seq_a, seq_b) in [
-        (1260990, 1260670, 1432930), (1414570, 2082450, 1432930),
-        (1424950, 1620400, 1432930), (1424960, 1423310, 1432930),
-        (1820790, 1250090, 1432930), (1489800, 1489340, 1432930),
-        (1523010, 1522150, 1432930), (1808080, 1604890, 1432930),
-        (1368820, 1580640, 1432930), (1550490, 1550190, 1432930),
-        (1619440, 2069220, 1432930), (1164910, 2821500, 1432920),
+        (1260990, 1260670, 1432930),
+        (1414570, 2082450, 1432930),
+        (1424950, 1620400, 1432930),
+        (1424960, 1423310, 1432930),
+        (1820790, 1250090, 1432930),
+        (1489800, 1489340, 1432930),
+        (1523010, 1522150, 1432930),
+        (1808080, 1604890, 1432930),
+        (1368820, 1580640, 1432930),
+        (1550490, 1550190, 1432930),
+        (1619440, 2069220, 1432930),
+        (1164910, 2821500, 1432920),
         (1462720, 1461140, 1432920),
     ] {
         m.insert(seq, def_toori_split(seq_a, 50.0, seq_b));
     }
 
     // ど- prefix splits
-    for (seq, seq_b) in [(2142710, 1185200), (2803190, 1595630), (2142680, 1290210), (2523480, 1442750)] {
+    for (seq, seq_b) in [
+        (2142710, 1185200),
+        (2803190, 1595630),
+        (2142680, 1290210),
+        (2523480, 1442750),
+    ] {
         m.insert(seq, do_split(seq_b, 30.0));
     }
 
     // し- splits
     for (seq, seq_b) in [
-        (1005700, 1156990), (1005830, 1370760), (1157200, 2772730),
-        (1157220, 1195970), (1157230, 1284430), (1157280, 1370090),
-        (1157310, 1405800), (1304890, 1256520), (1304960, 1307550),
-        (1305110, 1338180), (1305280, 1599390), (1305290, 1212670),
-        (1594300, 1596510), (1594310, 1406680), (1594460, 1372620),
-        (1594580, 1277100), (2518250, 1332760), (1157240, 1600260),
-        (1304820, 1207610), (2858937, 1406690),
+        (1005700, 1156990),
+        (1005830, 1370760),
+        (1157200, 2772730),
+        (1157220, 1195970),
+        (1157230, 1284430),
+        (1157280, 1370090),
+        (1157310, 1405800),
+        (1304890, 1256520),
+        (1304960, 1307550),
+        (1305110, 1338180),
+        (1305280, 1599390),
+        (1305290, 1212670),
+        (1594300, 1596510),
+        (1594310, 1406680),
+        (1594460, 1372620),
+        (1594580, 1277100),
+        (2518250, 1332760),
+        (1157240, 1600260),
+        (1304820, 1207610),
+        (2858937, 1406690),
     ] {
         m.insert(seq, shi_split(seq_b, 30.0));
     }
 
     // Complex splits
-    m.insert(1529550, Box::new(|conn, reading| { // なくなる
-        let text: Vec<char> = reading.text().chars().collect();
-        if text.len() < 3 { return None; }
-        let t1: String = text[..2].iter().collect();
-        let t2: String = text[2..].iter().collect();
-        let naku = find_word_conj_of(conn, &t1, &[1529520]);
-        let naru = find_word_conj_of(conn, &t2, &[1375610]);
-        if naku.is_empty() || naru.is_empty() { return None; }
-        Some(SplitResult {
-            parts: vec![
-                SplitPart { word: Word::Simple(naku[0].clone()), text: t1 },
-                SplitPart { word: Word::Simple(naru[0].clone()), text: t2 },
-            ],
-            score_bonus: 30.0,
-            modifiers: HashSet::new(),
-        })
-    }));
+    m.insert(
+        1529550,
+        Box::new(|conn, reading| {
+            // なくなる
+            let text: Vec<char> = reading.text().chars().collect();
+            if text.len() < 3 {
+                return None;
+            }
+            let t1: String = text[..2].iter().collect();
+            let t2: String = text[2..].iter().collect();
+            let naku = find_word_conj_of(conn, &t1, &[1529520]);
+            let naru = find_word_conj_of(conn, &t2, &[1375610]);
+            if naku.is_empty() || naru.is_empty() {
+                return None;
+            }
+            Some(SplitResult {
+                parts: vec![
+                    SplitPart {
+                        word: Word::Simple(naku[0].clone()),
+                        text: t1,
+                    },
+                    SplitPart {
+                        word: Word::Simple(naru[0].clone()),
+                        text: t2,
+                    },
+                ],
+                score_bonus: 30.0,
+                modifiers: HashSet::new(),
+            })
+        }),
+    );
 
-    m.insert(1922760, Box::new(|conn, reading| { // という
-        let text = reading.text();
-        let rest: String = text.chars().skip(1).collect();
-        let to = find_word_seq(conn, "と", &[1008490]);
-        let iu = find_word_conj_of(conn, &rest, &[1587040]);
-        if to.is_empty() || iu.is_empty() { return None; }
-        Some(SplitResult {
-            parts: vec![
-                SplitPart { word: Word::Simple(to[0].clone()), text: "と".into() },
-                SplitPart { word: Word::Simple(iu[0].clone()), text: rest },
-            ],
-            score_bonus: 20.0,
-            modifiers: HashSet::new(),
-        })
-    }));
+    m.insert(
+        1922760,
+        Box::new(|conn, reading| {
+            // という
+            let text = reading.text();
+            let rest: String = text.chars().skip(1).collect();
+            let to = find_word_seq(conn, "と", &[1008490]);
+            let iu = find_word_conj_of(conn, &rest, &[1587040]);
+            if to.is_empty() || iu.is_empty() {
+                return None;
+            }
+            Some(SplitResult {
+                parts: vec![
+                    SplitPart {
+                        word: Word::Simple(to[0].clone()),
+                        text: "と".into(),
+                    },
+                    SplitPart {
+                        word: Word::Simple(iu[0].clone()),
+                        text: rest,
+                    },
+                ],
+                score_bonus: 20.0,
+                modifiers: HashSet::new(),
+            })
+        }),
+    );
 
-    m.insert(2755350, Box::new(|conn, _reading| { // じゃない
-        let ja = find_word_seq(conn, "じゃ", &[2089020]);
-        let nai = find_word_conj_of(conn, "ない", &[1529520]);
-        if ja.is_empty() || nai.is_empty() { return None; }
-        Some(SplitResult {
-            parts: vec![
-                SplitPart { word: Word::Simple(ja[0].clone()), text: "じゃ".into() },
-                SplitPart { word: Word::Simple(nai[0].clone()), text: "ない".into() },
-            ],
-            score_bonus: 10.0,
-            modifiers: HashSet::new(),
-        })
-    }));
+    m.insert(
+        2755350,
+        Box::new(|conn, _reading| {
+            // じゃない
+            let ja = find_word_seq(conn, "じゃ", &[2089020]);
+            let nai = find_word_conj_of(conn, "ない", &[1529520]);
+            if ja.is_empty() || nai.is_empty() {
+                return None;
+            }
+            Some(SplitResult {
+                parts: vec![
+                    SplitPart {
+                        word: Word::Simple(ja[0].clone()),
+                        text: "じゃ".into(),
+                    },
+                    SplitPart {
+                        word: Word::Simple(nai[0].clone()),
+                        text: "ない".into(),
+                    },
+                ],
+                score_bonus: 10.0,
+                modifiers: HashSet::new(),
+            })
+        }),
+    );
 
-    m.insert(1009470, Box::new(|conn, _reading| { // なら
-        let nara = find_word_conj_of(conn, "なら", &[2089020]);
-        if nara.is_empty() { return None; }
-        Some(SplitResult {
-            parts: vec![SplitPart { word: Word::Simple(nara[0].clone()), text: "なら".into() }],
-            score_bonus: 1.0,
-            modifiers: HashSet::new(),
-        })
-    }));
+    m.insert(
+        1009470,
+        Box::new(|conn, _reading| {
+            // なら
+            let nara = find_word_conj_of(conn, "なら", &[2089020]);
+            if nara.is_empty() {
+                return None;
+            }
+            Some(SplitResult {
+                parts: vec![SplitPart {
+                    word: Word::Simple(nara[0].clone()),
+                    text: "なら".into(),
+                }],
+                score_bonus: 1.0,
+                modifiers: HashSet::new(),
+            })
+        }),
+    );
 
-    m.insert(1591050, Box::new(|conn, reading| { // 気がつく
-        let text: Vec<char> = reading.text().chars().collect();
-        if text.len() < 3 { return None; }
-        let rest: String = text[2..].iter().collect();
-        let ki = find_word_seq(conn, "気", &[1221520]);
-        let ga = find_word_seq(conn, "が", &[2028930]);
-        let tsuku = find_word_conj_of(conn, &rest, &[1495740]);
-        if ki.is_empty() || ga.is_empty() || tsuku.is_empty() { return None; }
-        Some(SplitResult {
-            parts: vec![
-                SplitPart { word: Word::Simple(ki[0].clone()), text: "気".into() },
-                SplitPart { word: Word::Simple(ga[0].clone()), text: "が".into() },
-                SplitPart { word: Word::Simple(tsuku[0].clone()), text: rest },
-            ],
-            score_bonus: 100.0,
-            modifiers: HashSet::new(),
-        })
-    }));
+    m.insert(
+        1591050,
+        Box::new(|conn, reading| {
+            // 気がつく
+            let text: Vec<char> = reading.text().chars().collect();
+            if text.len() < 3 {
+                return None;
+            }
+            let rest: String = text[2..].iter().collect();
+            let ki = find_word_seq(conn, "気", &[1221520]);
+            let ga = find_word_seq(conn, "が", &[2028930]);
+            let tsuku = find_word_conj_of(conn, &rest, &[1495740]);
+            if ki.is_empty() || ga.is_empty() || tsuku.is_empty() {
+                return None;
+            }
+            Some(SplitResult {
+                parts: vec![
+                    SplitPart {
+                        word: Word::Simple(ki[0].clone()),
+                        text: "気".into(),
+                    },
+                    SplitPart {
+                        word: Word::Simple(ga[0].clone()),
+                        text: "が".into(),
+                    },
+                    SplitPart {
+                        word: Word::Simple(tsuku[0].clone()),
+                        text: rest,
+                    },
+                ],
+                score_bonus: 100.0,
+                modifiers: HashSet::new(),
+            })
+        }),
+    );
 
-    m.insert(1221750, Box::new(|conn, _reading| { // 気のせい
-        let ki = find_word_seq(conn, "気", &[1221520]);
-        let no = find_word_seq(conn, "の", &[1469800]);
-        let sei = find_word_seq(conn, "せい", &[1610040]);
-        if ki.is_empty() || no.is_empty() || sei.is_empty() { return None; }
-        Some(SplitResult {
-            parts: vec![
-                SplitPart { word: Word::Simple(ki[0].clone()), text: "気".into() },
-                SplitPart { word: Word::Simple(no[0].clone()), text: "の".into() },
-                SplitPart { word: Word::Simple(sei[0].clone()), text: "せい".into() },
-            ],
-            score_bonus: 100.0,
-            modifiers: HashSet::new(),
-        })
-    }));
+    m.insert(
+        1221750,
+        Box::new(|conn, _reading| {
+            // 気のせい
+            let ki = find_word_seq(conn, "気", &[1221520]);
+            let no = find_word_seq(conn, "の", &[1469800]);
+            let sei = find_word_seq(conn, "せい", &[1610040]);
+            if ki.is_empty() || no.is_empty() || sei.is_empty() {
+                return None;
+            }
+            Some(SplitResult {
+                parts: vec![
+                    SplitPart {
+                        word: Word::Simple(ki[0].clone()),
+                        text: "気".into(),
+                    },
+                    SplitPart {
+                        word: Word::Simple(no[0].clone()),
+                        text: "の".into(),
+                    },
+                    SplitPart {
+                        word: Word::Simple(sei[0].clone()),
+                        text: "せい".into(),
+                    },
+                ],
+                score_bonus: 100.0,
+                modifiers: HashSet::new(),
+            })
+        }),
+    );
 
     m
 }
@@ -506,81 +653,145 @@ fn build_split_map() -> HashMap<i64, SplitFn> {
 fn build_segsplit_map() -> HashMap<i64, SplitFn> {
     let mut m: HashMap<i64, SplitFn> = HashMap::new();
 
-    m.insert(1008570, Box::new(|conn, reading| { // ところが
-        let text: Vec<char> = reading.text().chars().collect();
-        if text.len() < 2 { return None; }
-        let main: String = text[..text.len() - 1].iter().collect();
-        let tokoro = find_word_seq(conn, &main, &[1343100]);
-        let ga = find_word_seq(conn, "が", &[2028930]);
-        if tokoro.is_empty() || ga.is_empty() { return None; }
-        Some(SplitResult {
-            parts: vec![
-                SplitPart { word: Word::Simple(tokoro[0].clone()), text: main },
-                SplitPart { word: Word::Simple(ga[0].clone()), text: "が".into() },
-            ],
-            score_bonus: -10.0,
-            modifiers: HashSet::new(),
-        })
-    }));
+    m.insert(
+        1008570,
+        Box::new(|conn, reading| {
+            // ところが
+            let text: Vec<char> = reading.text().chars().collect();
+            if text.len() < 2 {
+                return None;
+            }
+            let main: String = text[..text.len() - 1].iter().collect();
+            let tokoro = find_word_seq(conn, &main, &[1343100]);
+            let ga = find_word_seq(conn, "が", &[2028930]);
+            if tokoro.is_empty() || ga.is_empty() {
+                return None;
+            }
+            Some(SplitResult {
+                parts: vec![
+                    SplitPart {
+                        word: Word::Simple(tokoro[0].clone()),
+                        text: main,
+                    },
+                    SplitPart {
+                        word: Word::Simple(ga[0].clone()),
+                        text: "が".into(),
+                    },
+                ],
+                score_bonus: -10.0,
+                modifiers: HashSet::new(),
+            })
+        }),
+    );
 
-    m.insert(1343110, Box::new(|conn, reading| { // ところで
-        let text: Vec<char> = reading.text().chars().collect();
-        if text.len() < 2 { return None; }
-        let main: String = text[..text.len() - 1].iter().collect();
-        let tokoro = find_word_seq(conn, &main, &[1343100]);
-        let de = find_word_seq(conn, "で", &[2028980]);
-        if tokoro.is_empty() || de.is_empty() { return None; }
-        Some(SplitResult {
-            parts: vec![
-                SplitPart { word: Word::Simple(tokoro[0].clone()), text: main },
-                SplitPart { word: Word::Simple(de[0].clone()), text: "で".into() },
-            ],
-            score_bonus: -10.0,
-            modifiers: HashSet::new(),
-        })
-    }));
+    m.insert(
+        1343110,
+        Box::new(|conn, reading| {
+            // ところで
+            let text: Vec<char> = reading.text().chars().collect();
+            if text.len() < 2 {
+                return None;
+            }
+            let main: String = text[..text.len() - 1].iter().collect();
+            let tokoro = find_word_seq(conn, &main, &[1343100]);
+            let de = find_word_seq(conn, "で", &[2028980]);
+            if tokoro.is_empty() || de.is_empty() {
+                return None;
+            }
+            Some(SplitResult {
+                parts: vec![
+                    SplitPart {
+                        word: Word::Simple(tokoro[0].clone()),
+                        text: main,
+                    },
+                    SplitPart {
+                        word: Word::Simple(de[0].clone()),
+                        text: "で".into(),
+                    },
+                ],
+                score_bonus: -10.0,
+                modifiers: HashSet::new(),
+            })
+        }),
+    );
 
-    m.insert(2028950, Box::new(|conn, _reading| { // とは
-        let to = find_word_seq(conn, "と", &[1008490]);
-        let ha = find_word_seq(conn, "は", &[2028920]);
-        if to.is_empty() || ha.is_empty() { return None; }
-        Some(SplitResult {
-            parts: vec![
-                SplitPart { word: Word::Simple(to[0].clone()), text: "と".into() },
-                SplitPart { word: Word::Simple(ha[0].clone()), text: "は".into() },
-            ],
-            score_bonus: -5.0,
-            modifiers: HashSet::new(),
-        })
-    }));
+    m.insert(
+        2028950,
+        Box::new(|conn, _reading| {
+            // とは
+            let to = find_word_seq(conn, "と", &[1008490]);
+            let ha = find_word_seq(conn, "は", &[2028920]);
+            if to.is_empty() || ha.is_empty() {
+                return None;
+            }
+            Some(SplitResult {
+                parts: vec![
+                    SplitPart {
+                        word: Word::Simple(to[0].clone()),
+                        text: "と".into(),
+                    },
+                    SplitPart {
+                        word: Word::Simple(ha[0].clone()),
+                        text: "は".into(),
+                    },
+                ],
+                score_bonus: -5.0,
+                modifiers: HashSet::new(),
+            })
+        }),
+    );
 
-    m.insert(1008450, Box::new(|conn, _reading| { // では
-        let de = find_word_seq(conn, "で", &[2028980]);
-        let ha = find_word_seq(conn, "は", &[2028920]);
-        if de.is_empty() || ha.is_empty() { return None; }
-        Some(SplitResult {
-            parts: vec![
-                SplitPart { word: Word::Simple(de[0].clone()), text: "で".into() },
-                SplitPart { word: Word::Simple(ha[0].clone()), text: "は".into() },
-            ],
-            score_bonus: -5.0,
-            modifiers: HashSet::new(),
-        })
-    }));
+    m.insert(
+        1008450,
+        Box::new(|conn, _reading| {
+            // では
+            let de = find_word_seq(conn, "で", &[2028980]);
+            let ha = find_word_seq(conn, "は", &[2028920]);
+            if de.is_empty() || ha.is_empty() {
+                return None;
+            }
+            Some(SplitResult {
+                parts: vec![
+                    SplitPart {
+                        word: Word::Simple(de[0].clone()),
+                        text: "で".into(),
+                    },
+                    SplitPart {
+                        word: Word::Simple(ha[0].clone()),
+                        text: "は".into(),
+                    },
+                ],
+                score_bonus: -5.0,
+                modifiers: HashSet::new(),
+            })
+        }),
+    );
 
-    m.insert(1007310, Box::new(|conn, _reading| { // だから
-        let da = find_word_seq(conn, "だ", &[2089020]);
-        let kara = find_word_seq(conn, "から", &[1002980]);
-        if da.is_empty() || kara.is_empty() { return None; }
-        Some(SplitResult {
-            parts: vec![
-                SplitPart { word: Word::Simple(da[0].clone()), text: "だ".into() },
-                SplitPart { word: Word::Simple(kara[0].clone()), text: "から".into() },
-            ],
-            score_bonus: -5.0,
-            modifiers: HashSet::new(),
-        })
-    }));
+    m.insert(
+        1007310,
+        Box::new(|conn, _reading| {
+            // だから
+            let da = find_word_seq(conn, "だ", &[2089020]);
+            let kara = find_word_seq(conn, "から", &[1002980]);
+            if da.is_empty() || kara.is_empty() {
+                return None;
+            }
+            Some(SplitResult {
+                parts: vec![
+                    SplitPart {
+                        word: Word::Simple(da[0].clone()),
+                        text: "だ".into(),
+                    },
+                    SplitPart {
+                        word: Word::Simple(kara[0].clone()),
+                        text: "から".into(),
+                    },
+                ],
+                score_bonus: -5.0,
+                modifiers: HashSet::new(),
+            })
+        }),
+    );
 
     m
 }
@@ -624,12 +835,10 @@ pub fn get_segsplit(conn: &Connection, segment: &Segment) -> Option<Segment> {
         Vec::new()
     };
 
-    let try_fn = |s: i64| -> Option<SplitResult> {
-        SEGSPLIT_MAP.get(&s).and_then(|f| f(conn, word))
-    };
+    let try_fn =
+        |s: i64| -> Option<SplitResult> { SEGSPLIT_MAP.get(&s).and_then(|f| f(conn, word)) };
 
-    let result = try_fn(seq)
-        .or_else(|| conj_of.iter().find_map(|c| try_fn(*c)));
+    let result = try_fn(seq).or_else(|| conj_of.iter().find_map(|c| try_fn(*c)));
     result.map(|r| create_split_segment(segment, r))
 }
 

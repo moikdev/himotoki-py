@@ -1,0 +1,17 @@
+[package]
+name = "himotoki-load"
+version = "0.3.2"
+edition = "2021"
+description = "JMdict XML → SQLite loader for himotoki (Rust port of himotoki/loading)"
+license = "MIT"
+
+[[bin]]
+name = "himotoki-load"
+path = "src/main.rs"
+
+[dependencies]
+rusqlite = { workspace = true }
+quick-xml = "0.36"
+anyhow = { workspace = true }
+clap = { workspace = true }
+csv = "1.3"

@@ -61,6 +61,15 @@ enum Cmd {
         #[arg(long, default_value_t = 5)]
         limit: usize,
     },
+    /// Time segment_text over an inputs.jsonl corpus (throughput bench).
+    Bench {
+        /// Path to inputs.jsonl ({"i","text"} lines)
+        #[arg(long)]
+        inputs: PathBuf,
+        /// Max inputs to process
+        #[arg(long)]
+        limit: Option<usize>,
+    },
     /// Reproduce scripts/dump_gold.py output from golden inputs.jsonl.
     Dump {
         /// Path to inputs.jsonl ({"i","text"} lines)
@@ -96,9 +105,43 @@ fn main() -> anyhow::Result<()> {
             for (path, score) in &paths {
                 println!("score={}", score);
                 for node in path {
-                    println!("  {}", serde_json::to_string(&golden::path_node_json(node))?);
+                    println!(
+                        "  {}",
+                        serde_json::to_string(&golden::path_node_json(node))?
+                    );
                 }
             }
+        }
+        Some(Cmd::Bench { inputs, limit }) => {
+            let f = BufReader::new(std::fs::File::open(inputs)?);
+            let mut texts = Vec::new();
+            for line in f.lines() {
+                let line = line?;
+                if line.trim().is_empty() {
+                    continue;
+                }
+                let v: serde_json::Value = serde_json::from_str(&line)?;
+                texts.push(v["text"].as_str().unwrap_or("").to_string());
+                if let Some(m) = limit {
+                    if texts.len() >= m {
+                        break;
+                    }
+                }
+            }
+            let t0 = std::time::Instant::now();
+            let mut nsegs = 0usize;
+            for t in &texts {
+                let paths = segment_text(&conn, t, index.as_ref(), 5);
+                nsegs += paths.len();
+            }
+            let el = t0.elapsed();
+            eprintln!(
+                "bench: {} inputs, {} paths, {:.3}s total, {:.1} ms/input",
+                texts.len(),
+                nsegs,
+                el.as_secs_f64(),
+                el.as_secs_f64() * 1000.0 / texts.len() as f64
+            );
         }
         Some(Cmd::Dump {
             inputs,
@@ -134,10 +177,8 @@ fn main() -> anyhow::Result<()> {
                 if word_infos.is_empty() {
                     println!("{}", text);
                 } else {
-                    let parts: Vec<&str> = word_infos
-                        .iter()
-                        .map(|wi| wi.kana_str_or_text())
-                        .collect();
+                    let parts: Vec<&str> =
+                        word_infos.iter().map(|wi| wi.kana_str_or_text()).collect();
                     println!("{}", parts.join(" "));
                 }
             } else if cli.full {
@@ -211,9 +252,7 @@ fn format_word_info_text(
                 lines.push(senses);
             }
         }
-        for cs in
-            himotoki_core::output::conjugation_display::get_conjugation_display(conn, wi)
-        {
+        for cs in himotoki_core::output::conjugation_display::get_conjugation_display(conn, wi) {
             lines.push(cs);
         }
     }
@@ -274,7 +313,7 @@ fn dump(
         }
 
         n += 1;
-        if n % 100 == 0 {
+        if n.is_multiple_of(100) {
             eprintln!("dump: {n}");
         }
         if let Some(m) = limit {

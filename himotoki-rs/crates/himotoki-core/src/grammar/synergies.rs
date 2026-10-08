@@ -174,82 +174,94 @@ pub fn def_segfilter_must_follow(
     filter_right: SegFilter,
     allow_first: bool,
 ) -> SegfilterFn {
-    Arc::new(move |seg_left: Option<&SegmentList>, seg_right: &SegmentList| {
-        let (mut satisfies_r, mut contradicts_r) = (Vec::new(), Vec::new());
-        for s in &seg_right.segments {
-            if filter_right(s) {
-                satisfies_r.push(s.clone());
-            } else {
-                contradicts_r.push(s.clone());
-            }
-        }
-        if satisfies_r.is_empty() {
-            return vec![(seg_left.cloned(), seg_right.clone())];
-        }
-        if allow_first && seg_left.is_none() {
-            return vec![(None, seg_right.clone())];
-        }
-        let left = match seg_left {
-            Some(l) if l.end == seg_right.start => l,
-            _ => {
-                // Not adjacent (or no left): only allow contradicts
-                if !contradicts_r.is_empty() {
-                    return vec![(
-                        seg_left.cloned(),
-                        SegmentList::new(
-                            contradicts_r,
-                            seg_right.start,
-                            seg_right.end,
-                            seg_right.matches,
-                        ),
-                    )];
+    Arc::new(
+        move |seg_left: Option<&SegmentList>, seg_right: &SegmentList| {
+            let (mut satisfies_r, mut contradicts_r) = (Vec::new(), Vec::new());
+            for s in &seg_right.segments {
+                if filter_right(s) {
+                    satisfies_r.push(s.clone());
+                } else {
+                    contradicts_r.push(s.clone());
                 }
-                return Vec::new();
             }
-        };
-        let (mut satisfies_l, mut contradicts_l) = (Vec::new(), Vec::new());
-        for s in &left.segments {
-            if filter_left(s) {
-                satisfies_l.push(s.clone());
+            if satisfies_r.is_empty() {
+                return vec![(seg_left.cloned(), seg_right.clone())];
+            }
+            if allow_first && seg_left.is_none() {
+                return vec![(None, seg_right.clone())];
+            }
+            let left = match seg_left {
+                Some(l) if l.end == seg_right.start => l,
+                _ => {
+                    // Not adjacent (or no left): only allow contradicts
+                    if !contradicts_r.is_empty() {
+                        return vec![(
+                            seg_left.cloned(),
+                            SegmentList::new(
+                                contradicts_r,
+                                seg_right.start,
+                                seg_right.end,
+                                seg_right.matches,
+                            ),
+                        )];
+                    }
+                    return Vec::new();
+                }
+            };
+            let (mut satisfies_l, mut contradicts_l) = (Vec::new(), Vec::new());
+            for s in &left.segments {
+                if filter_left(s) {
+                    satisfies_l.push(s.clone());
+                } else {
+                    contradicts_l.push(s.clone());
+                }
+            }
+            let mut results = Vec::new();
+            if !contradicts_l.is_empty() && !contradicts_r.is_empty() {
+                results.push((
+                    Some(left.clone()),
+                    SegmentList::new(
+                        contradicts_r.clone(),
+                        seg_right.start,
+                        seg_right.end,
+                        seg_right.matches,
+                    ),
+                ));
+            }
+            if !satisfies_l.is_empty() {
+                results.push((
+                    Some(SegmentList::new(
+                        satisfies_l,
+                        left.start,
+                        left.end,
+                        left.matches,
+                    )),
+                    SegmentList::new(
+                        satisfies_r,
+                        seg_right.start,
+                        seg_right.end,
+                        seg_right.matches,
+                    ),
+                ));
+            }
+            if results.is_empty() && !contradicts_r.is_empty() {
+                results.push((
+                    Some(left.clone()),
+                    SegmentList::new(
+                        contradicts_r,
+                        seg_right.start,
+                        seg_right.end,
+                        seg_right.matches,
+                    ),
+                ));
+            }
+            if results.is_empty() {
+                vec![(Some(left.clone()), seg_right.clone())]
             } else {
-                contradicts_l.push(s.clone());
+                results
             }
-        }
-        let mut results = Vec::new();
-        if !contradicts_l.is_empty() && !contradicts_r.is_empty() {
-            results.push((
-                Some(left.clone()),
-                SegmentList::new(
-                    contradicts_r.clone(),
-                    seg_right.start,
-                    seg_right.end,
-                    seg_right.matches,
-                ),
-            ));
-        }
-        if !satisfies_l.is_empty() {
-            results.push((
-                Some(SegmentList::new(satisfies_l, left.start, left.end, left.matches)),
-                SegmentList::new(
-                    satisfies_r,
-                    seg_right.start,
-                    seg_right.end,
-                    seg_right.matches,
-                ),
-            ));
-        }
-        if results.is_empty() && !contradicts_r.is_empty() {
-            results.push((
-                Some(left.clone()),
-                SegmentList::new(contradicts_r, seg_right.start, seg_right.end, seg_right.matches),
-            ));
-        }
-        if results.is_empty() {
-            vec![(Some(left.clone()), seg_right.clone())]
-        } else {
-            results
-        }
-    })
+        },
+    )
 }
 
 /// `apply_segfilters` — fold all segfilters over (left, right) pair sets.

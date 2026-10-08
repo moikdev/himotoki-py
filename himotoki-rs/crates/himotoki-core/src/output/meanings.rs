@@ -39,12 +39,11 @@ pub fn get_entry_reading(conn: &Connection, seq: i64) -> String {
 
 /// `get_matching_kana_for_kanji` — suffix-matched kana for a kanji text.
 pub fn get_matching_kana_for_kanji(conn: &Connection, seq: i64, kanji_text: &str) -> String {
-    let mut stmt = match conn
-        .prepare("SELECT text, ord FROM kana_text WHERE seq = ?1 ORDER BY ord")
-    {
-        Ok(s) => s,
-        Err(_) => return String::new(),
-    };
+    let mut stmt =
+        match conn.prepare_cached("SELECT text, ord FROM kana_text WHERE seq = ?1 ORDER BY ord") {
+            Ok(s) => s,
+            Err(_) => return String::new(),
+        };
     let kana_results: Vec<(String, i64)> = stmt
         .query_map([seq], |r| Ok((r.get(0)?, r.get(1)?)))
         .map(|rows| rows.flatten().collect())
@@ -127,19 +126,19 @@ impl ReadingsCache {
             return;
         }
         let ph = seqs.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-        let params: Vec<rusqlite::types::Value> =
-            seqs.iter().map(|i| (*i).into()).collect();
+        let params: Vec<rusqlite::types::Value> = seqs.iter().map(|i| (*i).into()).collect();
         for (table, map) in [
             ("kanji_text", &mut self.kanji_readings),
             ("kana_text", &mut self.kana_readings),
         ] {
-            let sql =
-                format!("SELECT seq, text FROM {} WHERE seq IN ({}) AND ord = 0", table, ph);
-            if let Ok(mut stmt) = conn.prepare(&sql) {
-                if let Ok(rows) = stmt.query_map(
-                    rusqlite::params_from_iter(params.clone()),
-                    |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)),
-                ) {
+            let sql = format!(
+                "SELECT seq, text FROM {} WHERE seq IN ({}) AND ord = 0",
+                table, ph
+            );
+            if let Ok(mut stmt) = conn.prepare_cached(&sql) {
+                if let Ok(rows) = stmt.query_map(rusqlite::params_from_iter(params.clone()), |r| {
+                    Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
+                }) {
                     for r in rows.flatten() {
                         map.insert(r.0, r.1);
                     }
@@ -151,7 +150,10 @@ impl ReadingsCache {
         self.kanji_readings.get(&seq).map(|s| s.as_str())
     }
     pub fn get_kana(&self, seq: i64) -> &str {
-        self.kana_readings.get(&seq).map(|s| s.as_str()).unwrap_or("")
+        self.kana_readings
+            .get(&seq)
+            .map(|s| s.as_str())
+            .unwrap_or("")
     }
     /// kanji preferred, else kana.
     pub fn get_source_text(&self, from_seq: i64) -> Option<String> {
@@ -183,10 +185,7 @@ pub fn collect_seqs_from_path(path: &[std::rc::Rc<PathNode>]) -> std::collection
     seqs
 }
 
-fn collect_segment_seqs(
-    segment: &Segment,
-    seqs: &mut std::collections::HashSet<i64>,
-) {
+fn collect_segment_seqs(segment: &Segment, seqs: &mut std::collections::HashSet<i64>) {
     match &segment.word {
         crate::types::Word::Counter(c) => {
             if let Some(s) = c.seq() {
@@ -261,22 +260,30 @@ pub fn has_conjugable_pos(conn: &Connection, seq: Option<i64>) -> bool {
         None => return false,
     };
     const NONPAST_POS: &[&str] = &[
-        "v1", "v1-s", "v1s", "v5aru", "v5b", "v5g", "v5k", "v5k-s", "v5m", "v5n",
-        "v5r", "v5r-i", "v5s", "v5t", "v5u", "v5u-s", "v5uru", "vk",
-        "vs-i", "vs-s", "vz", "adj-i", "adj-ix", "cop", "cop-da", "aux-v",
+        "v1", "v1-s", "v1s", "v5aru", "v5b", "v5g", "v5k", "v5k-s", "v5m", "v5n", "v5r", "v5r-i",
+        "v5s", "v5t", "v5u", "v5u-s", "v5uru", "vk", "vs-i", "vs-s", "vz", "adj-i", "adj-ix",
+        "cop", "cop-da", "aux-v",
     ];
-    let ph = NONPAST_POS.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let ph = NONPAST_POS
+        .iter()
+        .map(|_| "?")
+        .collect::<Vec<_>>()
+        .join(",");
     let sql = format!(
         "SELECT 1 FROM sense_prop sp JOIN sense s ON sp.sense_id = s.id \
          WHERE s.seq = ?1 AND sp.tag = 'pos' AND sp.text IN ({}) LIMIT 1",
         ph
     );
-    let mut stmt = match conn.prepare(&sql) {
+    let mut stmt = match conn.prepare_cached(&sql) {
         Ok(s) => s,
         Err(_) => return false,
     };
     let mut params: Vec<rusqlite::types::Value> = vec![seq.into()];
-    params.extend(NONPAST_POS.iter().map(|p| rusqlite::types::Value::from(p.to_string())));
+    params.extend(
+        NONPAST_POS
+            .iter()
+            .map(|p| rusqlite::types::Value::from(p.to_string())),
+    );
     stmt.query_row(rusqlite::params_from_iter(params), |_| Ok(()))
         .is_ok()
 }
@@ -286,8 +293,11 @@ pub fn has_conjugable_pos(conn: &Connection, seq: Option<i64>) -> bool {
 // ============================================================================
 
 /// `get_senses_raw` — [{ord, gloss, props}] for a seq.
-pub fn get_senses_raw(conn: &Connection, seq: i64) -> Vec<(i64, String, HashMap<String, Vec<String>>)> {
-    let mut stmt = match conn.prepare(
+pub fn get_senses_raw(
+    conn: &Connection,
+    seq: i64,
+) -> Vec<(i64, String, HashMap<String, Vec<String>>)> {
+    let mut stmt = match conn.prepare_cached(
         "SELECT s.ord, group_concat(g.text, '; ') FROM sense s \
          LEFT JOIN gloss g ON g.sense_id = s.id WHERE s.seq = ?1 \
          GROUP BY s.id ORDER BY s.ord",
@@ -297,12 +307,15 @@ pub fn get_senses_raw(conn: &Connection, seq: i64) -> Vec<(i64, String, HashMap<
     };
     let glosses: Vec<(i64, String)> = stmt
         .query_map([seq], |r| {
-            Ok((r.get::<_, i64>(0)?, r.get::<_, Option<String>>(1)?.unwrap_or_default()))
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, Option<String>>(1)?.unwrap_or_default(),
+            ))
         })
         .map(|rows| rows.flatten().collect())
         .unwrap_or_default();
 
-    let mut pmt = match conn.prepare(
+    let mut pmt = match conn.prepare_cached(
         "SELECT s.ord, sp.tag, sp.text FROM sense s \
          JOIN sense_prop sp ON sp.sense_id = s.id \
          WHERE s.seq = ?1 AND sp.tag IN ('pos','s_inf','stagk','stagr','field') \
@@ -329,7 +342,10 @@ pub fn get_senses_raw(conn: &Connection, seq: i64) -> Vec<(i64, String, HashMap<
 }
 
 /// `get_senses` — [{pos:"[a,b]", gloss, props}].
-pub fn get_senses(conn: &Connection, seq: i64) -> Vec<(String, String, HashMap<String, Vec<String>>)> {
+pub fn get_senses(
+    conn: &Connection,
+    seq: i64,
+) -> Vec<(String, String, HashMap<String, Vec<String>>)> {
     get_senses_raw(conn, seq)
         .into_iter()
         .map(|(_, gloss, props)| {
@@ -346,12 +362,9 @@ pub fn get_senses(conn: &Connection, seq: i64) -> Vec<(String, String, HashMap<S
 
 /// `get_root_seq` — first conjugation.from_seq for seq.
 pub fn get_root_seq(conn: &Connection, seq: i64) -> Option<i64> {
-    conn.query_row(
-        "SELECT \"from\" FROM conjugation WHERE seq = ?1 LIMIT 1",
-        [seq],
-        |r| r.get(0),
-    )
-    .ok()
+    conn.prepare_cached("SELECT \"from\" FROM conjugation WHERE seq = ?1 LIMIT 1")
+        .and_then(|mut s| s.query_row([seq], |r| r.get(0)))
+        .ok()
 }
 
 /// `get_senses_str` — formatted numbered senses.
@@ -378,11 +391,7 @@ pub fn get_senses_str(conn: &Connection, seq: i64) -> String {
 }
 
 /// `get_senses_json` — [{pos, gloss, field?, info?}] with pos_list filter.
-pub fn get_senses_json(
-    conn: &Connection,
-    seq: i64,
-    pos_list: Option<&[&str]>,
-) -> Vec<Value> {
+pub fn get_senses_json(conn: &Connection, seq: i64, pos_list: Option<&[&str]>) -> Vec<Value> {
     let mut result = Vec::new();
     let mut rpos = "[]".to_string();
     for (pos, gloss, props) in get_senses(conn, seq) {
@@ -439,26 +448,25 @@ pub fn conj_info_json(
 ) -> Vec<Value> {
     let mut result = Vec::new();
     let conjs: Vec<(i64, i64)> = {
-        let (sql, params): (String, Vec<rusqlite::types::Value>) =
-            match conjugations {
-                Some(ids) if !ids.is_empty() => {
-                    let ph = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-                    let mut p: Vec<rusqlite::types::Value> = vec![seq.into()];
-                    p.extend(ids.iter().map(|i| (*i).into()));
-                    (
-                        format!(
-                            "SELECT id, \"from\" FROM conjugation WHERE seq = ?1 AND id IN ({})",
-                            ph
-                        ),
-                        p,
-                    )
-                }
-                _ => (
-                    "SELECT id, \"from\" FROM conjugation WHERE seq = ?1".to_string(),
-                    vec![seq.into()],
-                ),
-            };
-        conn.prepare(&sql)
+        let (sql, params): (String, Vec<rusqlite::types::Value>) = match conjugations {
+            Some(ids) if !ids.is_empty() => {
+                let ph = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+                let mut p: Vec<rusqlite::types::Value> = vec![seq.into()];
+                p.extend(ids.iter().map(|i| (*i).into()));
+                (
+                    format!(
+                        "SELECT id, \"from\" FROM conjugation WHERE seq = ?1 AND id IN ({})",
+                        ph
+                    ),
+                    p,
+                )
+            }
+            _ => (
+                "SELECT id, \"from\" FROM conjugation WHERE seq = ?1".to_string(),
+                vec![seq.into()],
+            ),
+        };
+        conn.prepare_cached(&sql)
             .and_then(|mut s| {
                 s.query_map(rusqlite::params_from_iter(params), |r| {
                     Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?))
@@ -470,7 +478,7 @@ pub fn conj_info_json(
 
     for (conj_id, from_seq) in conjs {
         let props: Vec<crate::db::rows::ConjPropRow> = conn
-            .prepare(
+            .prepare_cached(
                 "SELECT id, conj_id, conj_type, pos, neg, fml FROM conj_prop WHERE conj_id = ?1",
             )
             .and_then(|mut s| {
@@ -575,8 +583,7 @@ pub fn populate_meanings(conn: &Connection, word_infos: &mut [crate::output::typ
 
     if !uncached.is_empty() {
         let ph = uncached.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-        let params: Vec<rusqlite::types::Value> =
-            uncached.iter().map(|i| (*i).into()).collect();
+        let params: Vec<rusqlite::types::Value> = uncached.iter().map(|i| (*i).into()).collect();
         // senses+glosses
         let sql = format!(
             "SELECT s.seq, s.ord, group_concat(g.text, '; ') FROM sense s \
@@ -584,17 +591,14 @@ pub fn populate_meanings(conn: &Connection, word_infos: &mut [crate::output::typ
              GROUP BY s.id ORDER BY s.seq, s.ord",
             ph
         );
-        if let Ok(mut st) = conn.prepare(&sql) {
-            if let Ok(rows) = st.query_map(
-                rusqlite::params_from_iter(params.clone()),
-                |r| {
-                    Ok((
-                        r.get::<_, i64>(0)?,
-                        r.get::<_, i64>(1)?,
-                        r.get::<_, Option<String>>(2)?,
-                    ))
-                },
-            ) {
+        if let Ok(mut st) = conn.prepare_cached(&sql) {
+            if let Ok(rows) = st.query_map(rusqlite::params_from_iter(params.clone()), |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, Option<String>>(2)?,
+                ))
+            }) {
                 for r in rows.flatten() {
                     if let Some(g) = r.2 {
                         meanings_by_seq.entry(r.0).or_default().push(g);
@@ -613,11 +617,10 @@ pub fn populate_meanings(conn: &Connection, word_infos: &mut [crate::output::typ
             ph
         );
         let mut pos_tags: HashMap<i64, Vec<String>> = HashMap::new();
-        if let Ok(mut st) = conn.prepare(&sql) {
-            if let Ok(rows) = st.query_map(
-                rusqlite::params_from_iter(params),
-                |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)),
-            ) {
+        if let Ok(mut st) = conn.prepare_cached(&sql) {
+            if let Ok(rows) = st.query_map(rusqlite::params_from_iter(params), |r| {
+                Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
+            }) {
                 for r in rows.flatten() {
                     pos_tags.entry(r.0).or_default().push(r.1);
                 }

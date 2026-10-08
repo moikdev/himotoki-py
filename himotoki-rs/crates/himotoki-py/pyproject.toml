@@ -1,0 +1,16 @@
+[build-system]
+requires = ["maturin>=1.5"]
+build-backend = "maturin"
+
+[project]
+name = "himotoki-rs"
+version = "0.3.2"
+description = "Rust-accelerated himotoki Japanese morphological analyzer (PyO3 bindings)"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+
+[tool.maturin]
+bindings = "pyo3"
+features = ["extension-module"]
+manifest-path = "himotoki-rs/crates/himotoki-py/Cargo.toml"
+module-name = "himotoki_rs"

@@ -35,12 +35,10 @@ pub fn find_word(conn: &Connection, word: &str, root_only: bool) -> Vec<WordMatc
              WHERE t.text = ?1 AND e.root_p = 1"
         )
     } else {
-        format!(
-            "SELECT id, seq, text, ord, common, {extra} FROM {table} WHERE text = ?1"
-        )
+        format!("SELECT id, seq, text, ord, common, {extra} FROM {table} WHERE text = ?1")
     };
     let mut matches: Vec<WordMatch> = Vec::new();
-    if let Ok(mut stmt) = conn.prepare(&sql) {
+    if let Ok(mut stmt) = conn.prepare_cached(&sql) {
         let kana = kana;
         let rows = stmt.query_map([word], move |r| {
             if kana {
@@ -94,11 +92,7 @@ pub fn find_word_as_hiragana(
 
 /// `find_word_full` — find_word + suffix compounds (+ optional hiragana).
 /// Returns a mixed list: simple matches then CompoundWords.
-pub fn find_word_full(
-    conn: &Connection,
-    word: &str,
-    as_hiragana_lookup: bool,
-) -> Vec<Word> {
+pub fn find_word_full(conn: &Connection, word: &str, as_hiragana_lookup: bool) -> Vec<Word> {
     let simple_words = find_word(conn, word, false);
     let mut results: Vec<Word> = simple_words.iter().cloned().map(Word::Simple).collect();
     let suffix_words =
@@ -158,11 +152,7 @@ where
 }
 
 /// `find_word_with_conj_type`.
-pub fn find_word_with_conj_type(
-    conn: &Connection,
-    word: &str,
-    conj_types: &[i64],
-) -> Vec<Word> {
+pub fn find_word_with_conj_type(conn: &Connection, word: &str, conj_types: &[i64]) -> Vec<Word> {
     find_word_with_conj_prop(
         conn,
         word,

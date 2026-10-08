@@ -72,7 +72,7 @@ pub fn get_conj_data(
         }
     }
     let conjs: Vec<ConjugationRow> = (|| -> rusqlite::Result<Vec<ConjugationRow>> {
-        let mut stmt = conn.prepare(&sql)?;
+        let mut stmt = conn.prepare_cached(&sql)?;
         let rows = stmt.query_map(rusqlite::params_from_iter(params), |r| {
             Ok(ConjugationRow {
                 id: r.get(0)?,
@@ -95,9 +95,12 @@ pub fn get_conj_data(
     }
 
     let conj_id_list: Vec<i64> = conjs.iter().map(|c| c.id).collect();
-    let ph = conj_id_list.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-    let params_v: Vec<rusqlite::types::Value> =
-        conj_id_list.iter().map(|i| (*i).into()).collect();
+    let ph = conj_id_list
+        .iter()
+        .map(|_| "?")
+        .collect::<Vec<_>>()
+        .join(",");
+    let params_v: Vec<rusqlite::types::Value> = conj_id_list.iter().map(|i| (*i).into()).collect();
 
     // src readings: SELECT conj_id, text, source_text FROM conj_source_reading
     let mut src_sql = format!(
@@ -115,9 +118,13 @@ pub fn get_conj_data(
         }
     }
     let mut src_by_conj: HashMap<i64, Vec<(String, String)>> = HashMap::new();
-    if let Ok(mut stmt) = conn.prepare(&src_sql) {
+    if let Ok(mut stmt) = conn.prepare_cached(&src_sql) {
         if let Ok(rows) = stmt.query_map(rusqlite::params_from_iter(src_params), |r| {
-            Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+            ))
         }) {
             for r in rows.flatten() {
                 src_by_conj.entry(r.0).or_default().push((r.1, r.2));
@@ -131,7 +138,7 @@ pub fn get_conj_data(
         ph
     );
     let mut props_by_conj: HashMap<i64, Vec<ConjPropRow>> = HashMap::new();
-    if let Ok(mut stmt) = conn.prepare(&prop_sql) {
+    if let Ok(mut stmt) = conn.prepare_cached(&prop_sql) {
         if let Ok(rows) = stmt.query_map(rusqlite::params_from_iter(params_v), |r| {
             Ok(ConjPropRow {
                 id: r.get(0)?,
@@ -183,21 +190,11 @@ pub fn get_word_conj_data(conn: &Connection, word: &Word) -> Vec<ConjData> {
         Word::Simple(w) => {
             let seq = w.seq();
             match &w.conjugations {
-                Conj::Ids(ids) => get_conj_data(
-                    conn,
-                    seq,
-                    None,
-                    Some(ids),
-                    Some(&[w.text().to_string()]),
-                ),
+                Conj::Ids(ids) => {
+                    get_conj_data(conn, seq, None, Some(ids), Some(&[w.text().to_string()]))
+                }
                 Conj::Root => Vec::new(),
-                Conj::Unset => get_conj_data(
-                    conn,
-                    seq,
-                    None,
-                    None,
-                    Some(&[w.text().to_string()]),
-                ),
+                Conj::Unset => get_conj_data(conn, seq, None, None, Some(&[w.text().to_string()])),
             }
         }
     }

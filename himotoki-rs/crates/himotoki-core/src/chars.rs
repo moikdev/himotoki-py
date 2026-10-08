@@ -35,37 +35,114 @@ pub static MODIFIER_CHARS: &[(&str, &str)] = &[
 /// Main kana character mappings: class name -> "hiragana+katakana" pair.
 /// Index 0 = hiragana, last = katakana (mirrors Python string indexing).
 pub static KANA_CHARS: &[(&str, &str)] = &[
-    ("a", "あア"), ("i", "いイ"), ("u", "うウ"), ("e", "えエ"), ("o", "おオ"),
-    ("ka", "かカ"), ("ki", "きキ"), ("ku", "くク"), ("ke", "けケ"), ("ko", "こコ"),
-    ("sa", "さサ"), ("shi", "しシ"), ("su", "すス"), ("se", "せセ"), ("so", "そソ"),
-    ("ta", "たタ"), ("chi", "ちチ"), ("tsu", "つツ"), ("te", "てテ"), ("to", "とト"),
-    ("na", "なナ"), ("ni", "にニ"), ("nu", "ぬヌ"), ("ne", "ねネ"), ("no", "のノ"),
-    ("ha", "はハ"), ("hi", "ひヒ"), ("fu", "ふフ"), ("he", "へヘ"), ("ho", "ほホ"),
-    ("ma", "まマ"), ("mi", "みミ"), ("mu", "むム"), ("me", "めメ"), ("mo", "もモ"),
-    ("ya", "やヤ"), ("yu", "ゆユ"), ("yo", "よヨ"),
-    ("ra", "らラ"), ("ri", "りリ"), ("ru", "るル"), ("re", "れレ"), ("ro", "ろロ"),
-    ("wa", "わワ"), ("wi", "ゐヰ"), ("we", "ゑヱ"), ("wo", "をヲ"),
+    ("a", "あア"),
+    ("i", "いイ"),
+    ("u", "うウ"),
+    ("e", "えエ"),
+    ("o", "おオ"),
+    ("ka", "かカ"),
+    ("ki", "きキ"),
+    ("ku", "くク"),
+    ("ke", "けケ"),
+    ("ko", "こコ"),
+    ("sa", "さサ"),
+    ("shi", "しシ"),
+    ("su", "すス"),
+    ("se", "せセ"),
+    ("so", "そソ"),
+    ("ta", "たタ"),
+    ("chi", "ちチ"),
+    ("tsu", "つツ"),
+    ("te", "てテ"),
+    ("to", "とト"),
+    ("na", "なナ"),
+    ("ni", "にニ"),
+    ("nu", "ぬヌ"),
+    ("ne", "ねネ"),
+    ("no", "のノ"),
+    ("ha", "はハ"),
+    ("hi", "ひヒ"),
+    ("fu", "ふフ"),
+    ("he", "へヘ"),
+    ("ho", "ほホ"),
+    ("ma", "まマ"),
+    ("mi", "みミ"),
+    ("mu", "むム"),
+    ("me", "めメ"),
+    ("mo", "もモ"),
+    ("ya", "やヤ"),
+    ("yu", "ゆユ"),
+    ("yo", "よヨ"),
+    ("ra", "らラ"),
+    ("ri", "りリ"),
+    ("ru", "るル"),
+    ("re", "れレ"),
+    ("ro", "ろロ"),
+    ("wa", "わワ"),
+    ("wi", "ゐヰ"),
+    ("we", "ゑヱ"),
+    ("wo", "をヲ"),
     ("n", "んン"),
-    ("ga", "がガ"), ("gi", "ぎギ"), ("gu", "ぐグ"), ("ge", "げゲ"), ("go", "ごゴ"),
-    ("za", "ざザ"), ("ji", "じジ"), ("zu", "ずズ"), ("ze", "ぜゼ"), ("zo", "ぞゾ"),
-    ("da", "だダ"), ("dji", "ぢヂ"), ("dzu", "づヅ"), ("de", "でデ"), ("do", "どド"),
-    ("ba", "ばバ"), ("bi", "びビ"), ("bu", "ぶブ"), ("be", "べベ"), ("bo", "ぼボ"),
-    ("pa", "ぱパ"), ("pi", "ぴピ"), ("pu", "ぷプ"), ("pe", "ぺペ"), ("po", "ぽポ"),
+    ("ga", "がガ"),
+    ("gi", "ぎギ"),
+    ("gu", "ぐグ"),
+    ("ge", "げゲ"),
+    ("go", "ごゴ"),
+    ("za", "ざザ"),
+    ("ji", "じジ"),
+    ("zu", "ずズ"),
+    ("ze", "ぜゼ"),
+    ("zo", "ぞゾ"),
+    ("da", "だダ"),
+    ("dji", "ぢヂ"),
+    ("dzu", "づヅ"),
+    ("de", "でデ"),
+    ("do", "どド"),
+    ("ba", "ばバ"),
+    ("bi", "びビ"),
+    ("bu", "ぶブ"),
+    ("be", "べベ"),
+    ("bo", "ぼボ"),
+    ("pa", "ぱパ"),
+    ("pi", "ぴピ"),
+    ("pu", "ぷプ"),
+    ("pe", "ぺペ"),
+    ("po", "ぽポ"),
     ("vu", "ゔヴ"),
 ];
 
 /// Voicing mappings (dakuten): unvoiced class -> voiced class.
 pub static DAKUTEN_MAP: &[(&str, &str)] = &[
-    ("ka", "ga"), ("ki", "gi"), ("ku", "gu"), ("ke", "ge"), ("ko", "go"),
-    ("sa", "za"), ("shi", "ji"), ("su", "zu"), ("se", "ze"), ("so", "zo"),
-    ("ta", "da"), ("chi", "dji"), ("tsu", "dzu"), ("te", "de"), ("to", "do"),
-    ("ha", "ba"), ("hi", "bi"), ("fu", "bu"), ("he", "be"), ("ho", "bo"),
+    ("ka", "ga"),
+    ("ki", "gi"),
+    ("ku", "gu"),
+    ("ke", "ge"),
+    ("ko", "go"),
+    ("sa", "za"),
+    ("shi", "ji"),
+    ("su", "zu"),
+    ("se", "ze"),
+    ("so", "zo"),
+    ("ta", "da"),
+    ("chi", "dji"),
+    ("tsu", "dzu"),
+    ("te", "de"),
+    ("to", "do"),
+    ("ha", "ba"),
+    ("hi", "bi"),
+    ("fu", "bu"),
+    ("he", "be"),
+    ("ho", "bo"),
     ("u", "vu"),
 ];
 
 /// Handakuten (semi-voicing): h-class -> p-class.
 pub static HANDAKUTEN_MAP: &[(&str, &str)] = &[
-    ("ha", "pa"), ("hi", "pi"), ("fu", "pu"), ("he", "pe"), ("ho", "po"),
+    ("ha", "pa"),
+    ("hi", "pi"),
+    ("fu", "pu"),
+    ("he", "pe"),
+    ("ho", "po"),
 ];
 
 /// char -> class name reverse lookup (KANA_CHARS + MODIFIER_CHARS + sokuon/iter).
@@ -101,8 +178,7 @@ fn char_class_map() -> &'static HashMap<char, &'static str> {
 // Character Width Normalization
 // ============================================================================
 
-pub const HALF_WIDTH_KANA: &str =
-    "･ｦｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝﾞﾟ";
+pub const HALF_WIDTH_KANA: &str = "･ｦｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝﾞﾟ";
 pub const FULL_WIDTH_KANA: &str =
     "・ヲァィゥェォャュョッーアイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワン゛゜";
 
@@ -126,12 +202,24 @@ pub const NORMAL_CHARS: &str = concat!(
 
 /// Punctuation normalization — order matters ("・・・" before "・").
 pub static PUNCTUATION_MAP: &[(&str, &str)] = &[
-    ("【", " ["), ("】", "] "),
-    ("、", ", "), ("，", ", "),
-    ("。", ". "), ("・・・", "... "), ("・", " "), ("　", " "),
-    ("「", " \""), ("」", "\" "), ("゛", "\""),
-    ("『", " «"), ("』", "» "),
-    ("〜", " - "), ("：", ": "), ("！", "! "), ("？", "? "), ("；", "; "),
+    ("【", " ["),
+    ("】", "] "),
+    ("、", ", "),
+    ("，", ", "),
+    ("。", ". "),
+    ("・・・", "... "),
+    ("・", " "),
+    ("　", " "),
+    ("「", " \""),
+    ("」", "\" "),
+    ("゛", "\""),
+    ("『", " «"),
+    ("』", "» "),
+    ("〜", " - "),
+    ("：", ": "),
+    ("！", "! "),
+    ("？", "? "),
+    ("；", "; "),
 ];
 
 // ============================================================================
@@ -159,11 +247,17 @@ pub fn is_katakana_uniq_char(c: char) -> bool {
 }
 
 pub fn is_hiragana_char(c: char) -> bool {
-    matches!(c, '\u{3041}'..='\u{3094}' | '\u{309D}' | '\u{309E}' | '\u{30FC}')
+    matches!(
+        c,
+        '\u{3041}'..='\u{3094}' | '\u{309D}' | '\u{309E}' | '\u{30FC}'
+    )
 }
 
 pub fn is_kanji_char(c: char) -> bool {
-    matches!(c, '\u{3005}' | '\u{30F6}' | '\u{3030}' | '\u{4E00}'..='\u{9FAF}')
+    matches!(
+        c,
+        '\u{3005}' | '\u{30F6}' | '\u{3030}' | '\u{4E00}'..='\u{9FAF}'
+    )
 }
 
 /// Kanji "char" pattern used by sequential_kanji_positions: [々一-龯]
@@ -191,8 +285,26 @@ pub fn is_numeric_char(c: char) -> bool {
     is_digit_char(c)
         || matches!(
             c,
-            '一' | '二' | '三' | '四' | '五' | '六' | '七' | '八' | '九' | '零' | '壱' | '弐'
-                | '参' | '拾' | '十' | '百' | '千' | '万' | '億' | '兆' | '京'
+            '一' | '二'
+                | '三'
+                | '四'
+                | '五'
+                | '六'
+                | '七'
+                | '八'
+                | '九'
+                | '零'
+                | '壱'
+                | '弐'
+                | '参'
+                | '拾'
+                | '十'
+                | '百'
+                | '千'
+                | '万'
+                | '億'
+                | '兆'
+                | '京'
         )
 }
 
@@ -255,13 +367,10 @@ pub fn has_kana(word: &str) -> bool {
 // ============================================================================
 
 fn kana_pair(name: &str) -> Option<(char, char)> {
-    KANA_CHARS
-        .iter()
-        .find(|(n, _)| *n == name)
-        .map(|(_, s)| {
-            let mut it = s.chars();
-            (it.next().unwrap(), it.next_back().unwrap())
-        })
+    KANA_CHARS.iter().find(|(n, _)| *n == name).map(|(_, s)| {
+        let mut it = s.chars();
+        (it.next().unwrap(), it.next_back().unwrap())
+    })
 }
 
 fn modifier_pair(name: &str) -> Option<(char, char)> {
@@ -347,7 +456,11 @@ pub fn rendaku(text: &str, handakuten: bool) -> String {
     let Some(cls) = get_char_class(first) else {
         return text.to_string();
     };
-    let voice_map = if handakuten { HANDAKUTEN_MAP } else { DAKUTEN_MAP };
+    let voice_map = if handakuten {
+        HANDAKUTEN_MAP
+    } else {
+        DAKUTEN_MAP
+    };
     let Some(voiced_cls) = map_get(voice_map, cls) else {
         return text.to_string();
     };
@@ -373,11 +486,7 @@ pub fn unrendaku(text: &str) -> String {
         return text.to_string();
     };
     // UNDAKUTEN_MAP is the reverse of DAKUTEN_MAP
-    let Some(unvoiced_cls) = DAKUTEN_MAP
-        .iter()
-        .find(|(_, v)| *v == cls)
-        .map(|(k, _)| *k)
-    else {
+    let Some(unvoiced_cls) = DAKUTEN_MAP.iter().find(|(_, v)| *v == cls).map(|(k, _)| *k) else {
         return text.to_string();
     };
     let voiced_chars = kana_chars_of(cls);
@@ -518,10 +627,7 @@ pub fn kanji_match(word: &str, reading: &str) -> bool {
     let mask = kanji_mask(word);
     let rchars: Vec<char> = reading.chars().collect();
     // Split mask on '%' into literal segments; '%' = .+ (>=1 chars)
-    let segs: Vec<Vec<char>> = mask
-        .split('%')
-        .map(|s| s.chars().collect())
-        .collect();
+    let segs: Vec<Vec<char>> = mask.split('%').map(|s| s.chars().collect()).collect();
     let n_wild = segs.len() - 1;
 
     // match positions of literal segments within reading
@@ -574,12 +680,7 @@ pub fn kanji_match(word: &str, reading: &str) -> bool {
         }
         return match_from(&segs, 0, &rchars, n_wild, 0) || {
             // general: last seg may match earlier leaving >=1 trailing
-            fn with_tail(
-                segs: &[Vec<char>],
-                ri: usize,
-                rchars: &[char],
-                wi: usize,
-            ) -> bool {
+            fn with_tail(segs: &[Vec<char>], ri: usize, rchars: &[char], wi: usize) -> bool {
                 if wi == segs.len() {
                     return ri < rchars.len();
                 }
@@ -636,25 +737,89 @@ pub fn join(separator: &str, items: &[String]) -> String {
 
 fn romaji_of(class: &str) -> Option<&'static str> {
     Some(match class {
-        "a" => "a", "i" => "i", "u" => "u", "e" => "e", "o" => "o",
-        "ka" => "ka", "ki" => "ki", "ku" => "ku", "ke" => "ke", "ko" => "ko",
-        "sa" => "sa", "shi" => "shi", "su" => "su", "se" => "se", "so" => "so",
-        "ta" => "ta", "chi" => "chi", "tsu" => "tsu", "te" => "te", "to" => "to",
-        "na" => "na", "ni" => "ni", "nu" => "nu", "ne" => "ne", "no" => "no",
-        "ha" => "ha", "hi" => "hi", "fu" => "fu", "he" => "he", "ho" => "ho",
-        "ma" => "ma", "mi" => "mi", "mu" => "mu", "me" => "me", "mo" => "mo",
-        "ya" => "ya", "yu" => "yu", "yo" => "yo",
-        "ra" => "ra", "ri" => "ri", "ru" => "ru", "re" => "re", "ro" => "ro",
-        "wa" => "wa", "wi" => "wi", "we" => "we", "wo" => "wo",
+        "a" => "a",
+        "i" => "i",
+        "u" => "u",
+        "e" => "e",
+        "o" => "o",
+        "ka" => "ka",
+        "ki" => "ki",
+        "ku" => "ku",
+        "ke" => "ke",
+        "ko" => "ko",
+        "sa" => "sa",
+        "shi" => "shi",
+        "su" => "su",
+        "se" => "se",
+        "so" => "so",
+        "ta" => "ta",
+        "chi" => "chi",
+        "tsu" => "tsu",
+        "te" => "te",
+        "to" => "to",
+        "na" => "na",
+        "ni" => "ni",
+        "nu" => "nu",
+        "ne" => "ne",
+        "no" => "no",
+        "ha" => "ha",
+        "hi" => "hi",
+        "fu" => "fu",
+        "he" => "he",
+        "ho" => "ho",
+        "ma" => "ma",
+        "mi" => "mi",
+        "mu" => "mu",
+        "me" => "me",
+        "mo" => "mo",
+        "ya" => "ya",
+        "yu" => "yu",
+        "yo" => "yo",
+        "ra" => "ra",
+        "ri" => "ri",
+        "ru" => "ru",
+        "re" => "re",
+        "ro" => "ro",
+        "wa" => "wa",
+        "wi" => "wi",
+        "we" => "we",
+        "wo" => "wo",
         "n" => "n",
-        "ga" => "ga", "gi" => "gi", "gu" => "gu", "ge" => "ge", "go" => "go",
-        "za" => "za", "ji" => "ji", "zu" => "zu", "ze" => "ze", "zo" => "zo",
-        "da" => "da", "dji" => "di", "dzu" => "du", "de" => "de", "do" => "do",
-        "ba" => "ba", "bi" => "bi", "bu" => "bu", "be" => "be", "bo" => "bo",
-        "pa" => "pa", "pi" => "pi", "pu" => "pu", "pe" => "pe", "po" => "po",
+        "ga" => "ga",
+        "gi" => "gi",
+        "gu" => "gu",
+        "ge" => "ge",
+        "go" => "go",
+        "za" => "za",
+        "ji" => "ji",
+        "zu" => "zu",
+        "ze" => "ze",
+        "zo" => "zo",
+        "da" => "da",
+        "dji" => "di",
+        "dzu" => "du",
+        "de" => "de",
+        "do" => "do",
+        "ba" => "ba",
+        "bi" => "bi",
+        "bu" => "bu",
+        "be" => "be",
+        "bo" => "bo",
+        "pa" => "pa",
+        "pi" => "pi",
+        "pu" => "pu",
+        "pe" => "pe",
+        "po" => "po",
         "vu" => "vu",
-        "+a" => "a", "+i" => "i", "+u" => "u", "+e" => "e", "+o" => "o",
-        "+ya" => "ya", "+yu" => "yu", "+yo" => "yo", "+wa" => "wa",
+        "+a" => "a",
+        "+i" => "i",
+        "+u" => "u",
+        "+e" => "e",
+        "+o" => "o",
+        "+ya" => "ya",
+        "+yu" => "yu",
+        "+yo" => "yo",
+        "+wa" => "wa",
         "sokuon" | "long_vowel" | "iter" | "iter_v" => "",
         _ => return None,
     })

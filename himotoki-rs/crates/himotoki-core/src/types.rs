@@ -109,17 +109,14 @@ impl Reading {
 
 /// Mirrors Python `Optional[List[int] | 'root']`.
 #[derive(Debug, Clone, PartialEq)]
+#[derive(Default)]
 pub enum Conj {
+    #[default]
     Unset,
     Root,
     Ids(Vec<i64>),
 }
 
-impl Default for Conj {
-    fn default() -> Self {
-        Conj::Unset
-    }
-}
 
 impl Conj {
     pub fn is_root(&self) -> bool {
@@ -139,9 +136,9 @@ impl Conj {
 
 #[derive(Debug, Clone)]
 pub struct ConjData {
-    pub seq: i64,             // conjugated entry seq
-    pub from_seq: i64,        // root entry seq
-    pub via: Option<i64>,     // intermediate seq for secondary conjugations
+    pub seq: i64,         // conjugated entry seq
+    pub from_seq: i64,    // root entry seq
+    pub via: Option<i64>, // intermediate seq for secondary conjugations
     pub prop: Option<ConjPropRow>,
     /// (conjugated_text, source_text) pairs
     pub src_map: Vec<(String, String)>,
@@ -553,7 +550,9 @@ impl Segment {
 
 #[derive(Debug, Clone, Default)]
 pub struct SegmentList {
-    pub segments: Vec<Segment>,
+    /// Rc so that filtered/cloned lists share segments (Python's reference
+    /// semantics make list copies shallow — mirrors that cost profile).
+    pub segments: Vec<Rc<Segment>>,
     pub start: usize,
     pub end: usize,
     /// DP scratch — populated by find_best_path.
@@ -562,7 +561,7 @@ pub struct SegmentList {
 }
 
 impl SegmentList {
-    pub fn new(segments: Vec<Segment>, start: usize, end: usize, matches: usize) -> Self {
+    pub fn new(segments: Vec<Rc<Segment>>, start: usize, end: usize, matches: usize) -> Self {
         SegmentList {
             segments,
             start,
@@ -570,6 +569,16 @@ impl SegmentList {
             top: None,
             matches,
         }
+    }
+
+    /// Build from owned segments (join loop).
+    pub fn from_owned(segments: Vec<Segment>, start: usize, end: usize, matches: usize) -> Self {
+        SegmentList::new(
+            segments.into_iter().map(Rc::new).collect(),
+            start,
+            end,
+            matches,
+        )
     }
 }
 
@@ -612,11 +621,7 @@ impl PathNode {
     /// `get_segment_score` equivalent.
     pub fn score(&self) -> f64 {
         match self {
-            PathNode::List(l) => l
-                .segments
-                .iter()
-                .map(|s| s.score)
-                .fold(0.0, f64::max),
+            PathNode::List(l) => l.segments.iter().map(|s| s.score).fold(0.0, f64::max),
             PathNode::Seg(s) => s.score,
             PathNode::Syn(s) => s.score,
         }

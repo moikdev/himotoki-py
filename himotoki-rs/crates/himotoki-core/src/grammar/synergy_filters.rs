@@ -39,8 +39,7 @@ pub fn filter_is_noun() -> Filter {
             let kpcl = seg.info.kpcl;
             let (k, p, c, l) = (kpcl[0], kpcl[1], kpcl[2], kpcl[3]);
             const NOUN_POS: &[&str] = &["n", "n-adv", "n-t", "adj-na", "n-suf", "pn"];
-            if (l || k || (p && c))
-                && seg.info.posi.iter().any(|p| NOUN_POS.contains(&p.as_str()))
+            if (l || k || (p && c)) && seg.info.posi.iter().any(|p| NOUN_POS.contains(&p.as_str()))
             {
                 return true;
             }

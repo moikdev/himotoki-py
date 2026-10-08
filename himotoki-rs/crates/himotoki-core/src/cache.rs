@@ -85,7 +85,10 @@ pub fn preload_scoring_caches(conn: &Connection, seqs: &HashSet<i64>) {
             .as_ref()
             .map(|m| m.keys().copied().collect())
             .unwrap_or_default();
-        seqs.iter().copied().filter(|s| !cached.contains(s)).collect()
+        seqs.iter()
+            .copied()
+            .filter(|s| !cached.contains(s))
+            .collect()
     };
     if !missing.is_empty() {
         let ph = missing.iter().map(|_| "?").collect::<Vec<_>>().join(",");
@@ -93,9 +96,8 @@ pub fn preload_scoring_caches(conn: &Connection, seqs: &HashSet<i64>) {
             "SELECT seq, root_p, n_kanji, n_kana, primary_nokanji FROM entry WHERE seq IN ({})",
             ph
         );
-        if let Ok(mut stmt) = conn.prepare(&sql) {
-            let params: Vec<rusqlite::types::Value> =
-                missing.iter().map(|i| (*i).into()).collect();
+        if let Ok(mut stmt) = conn.prepare_cached(&sql) {
+            let params: Vec<rusqlite::types::Value> = missing.iter().map(|i| (*i).into()).collect();
             if let Ok(rows) = stmt.query_map(rusqlite::params_from_iter(params), |r| {
                 Ok(EntryRow {
                     seq: r.get(0)?,
@@ -134,10 +136,12 @@ pub fn preload_scoring_caches(conn: &Connection, seqs: &HashSet<i64>) {
             ph
         );
         let mut uk_seqs: HashSet<i64> = HashSet::new();
-        if let Ok(mut stmt) = conn.prepare(&sql) {
+        if let Ok(mut stmt) = conn.prepare_cached(&sql) {
             let params: Vec<rusqlite::types::Value> =
                 uk_missing.iter().map(|i| (*i).into()).collect();
-            if let Ok(rows) = stmt.query_map(rusqlite::params_from_iter(params), |r| r.get::<_, i64>(0)) {
+            if let Ok(rows) =
+                stmt.query_map(rusqlite::params_from_iter(params), |r| r.get::<_, i64>(0))
+            {
                 for r in rows.flatten() {
                     uk_seqs.insert(r);
                 }
@@ -159,14 +163,18 @@ pub fn preload_scoring_caches(conn: &Connection, seqs: &HashSet<i64>) {
             .collect()
     };
     if !pos_missing.is_empty() {
-        let ph = pos_missing.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let ph = pos_missing
+            .iter()
+            .map(|_| "?")
+            .collect::<Vec<_>>()
+            .join(",");
         let sql = format!(
             "SELECT seq, text FROM sense_prop WHERE seq IN ({}) AND tag='pos' \
              AND sense_id NOT IN (SELECT sense_id FROM sense_prop WHERE tag='misc' AND text IN ('arch','obsc','rare'))",
             ph
         );
         let mut by_seq: HashMap<i64, HashSet<String>> = HashMap::new();
-        if let Ok(mut stmt) = conn.prepare(&sql) {
+        if let Ok(mut stmt) = conn.prepare_cached(&sql) {
             let params: Vec<rusqlite::types::Value> =
                 pos_missing.iter().map(|i| (*i).into()).collect();
             if let Ok(rows) = stmt.query_map(rusqlite::params_from_iter(params), |r| {
@@ -180,7 +188,8 @@ pub fn preload_scoring_caches(conn: &Connection, seqs: &HashSet<i64>) {
         let mut guard = POS_SEQ_CACHE.lock().unwrap();
         let m = guard.get_or_insert_with(HashMap::new);
         for seq in pos_missing {
-            m.entry(seq).or_insert_with(|| by_seq.remove(&seq).unwrap_or_default());
+            m.entry(seq)
+                .or_insert_with(|| by_seq.remove(&seq).unwrap_or_default());
         }
     }
 }
@@ -195,7 +204,7 @@ fn build_archaic_cache(conn: &Connection) -> HashSet<i64> {
     let mut arch: HashSet<i64> = HashSet::new();
     let sql = "SELECT seq FROM sense GROUP BY seq HAVING COUNT(id) = SUM(\
                id IN (SELECT sense_id FROM sense_prop WHERE tag='misc' AND text IN ('arch','obsc','rare')))";
-    if let Ok(mut stmt) = conn.prepare(sql) {
+    if let Ok(mut stmt) = conn.prepare_cached(sql) {
         if let Ok(rows) = stmt.query_map([], |r| r.get::<_, i64>(0)) {
             for r in rows.flatten() {
                 arch.insert(r);
@@ -208,10 +217,11 @@ fn build_archaic_cache(conn: &Connection) -> HashSet<i64> {
             "SELECT DISTINCT seq FROM conjugation WHERE \"from\" IN ({})",
             ph
         );
-        if let Ok(mut stmt) = conn.prepare(&sql) {
-            let params: Vec<rusqlite::types::Value> =
-                arch.iter().map(|i| (*i).into()).collect();
-            if let Ok(rows) = stmt.query_map(rusqlite::params_from_iter(params), |r| r.get::<_, i64>(0)) {
+        if let Ok(mut stmt) = conn.prepare_cached(&sql) {
+            let params: Vec<rusqlite::types::Value> = arch.iter().map(|i| (*i).into()).collect();
+            if let Ok(rows) =
+                stmt.query_map(rusqlite::params_from_iter(params), |r| r.get::<_, i64>(0))
+            {
                 for r in rows.flatten() {
                     arch.insert(r);
                 }
@@ -248,7 +258,7 @@ pub fn is_prefer_kana(conn: &Connection, seq_set: &[i64]) -> bool {
     );
     let params: Vec<rusqlite::types::Value> = key.iter().map(|i| (*i).into()).collect();
     let result = conn
-        .prepare(&sql)
+        .prepare_cached(&sql)
         .and_then(|mut s| s.query_row(rusqlite::params_from_iter(params), |_| Ok(())))
         .is_ok();
     UK_CACHE
@@ -278,9 +288,8 @@ pub fn get_non_arch_posi(conn: &Connection, seq_set: &HashSet<i64>) -> HashSet<S
         );
         let mut by_seq: HashMap<i64, HashSet<String>> =
             missing.iter().map(|s| (*s, HashSet::new())).collect();
-        if let Ok(mut stmt) = conn.prepare(&sql) {
-            let params: Vec<rusqlite::types::Value> =
-                missing.iter().map(|i| (*i).into()).collect();
+        if let Ok(mut stmt) = conn.prepare_cached(&sql) {
+            let params: Vec<rusqlite::types::Value> = missing.iter().map(|i| (*i).into()).collect();
             if let Ok(rows) = stmt.query_map(rusqlite::params_from_iter(params), |r| {
                 Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
             }) {
@@ -350,7 +359,7 @@ impl ReadingsCache {
         }
         let ph = seqs.iter().map(|_| "?").collect::<Vec<_>>().join(",");
         let params: Vec<rusqlite::types::Value> = seqs.iter().map(|s| (*s).into()).collect();
-        let mut stmt = conn.prepare(&format!(
+        let mut stmt = conn.prepare_cached(&format!(
             "SELECT id, seq, text, ord, common, best_kana, nokanji FROM kanji_text WHERE seq IN ({}) ORDER BY seq, ord",
             ph
         ))?;
@@ -369,7 +378,7 @@ impl ReadingsCache {
         for r in rows.flatten() {
             self.kanji.entry(r.seq).or_default().push(r);
         }
-        let mut stmt = conn.prepare(&format!(
+        let mut stmt = conn.prepare_cached(&format!(
             "SELECT id, seq, text, ord, common, best_kanji, nokanji FROM kana_text WHERE seq IN ({}) ORDER BY seq, ord",
             ph
         ))?;

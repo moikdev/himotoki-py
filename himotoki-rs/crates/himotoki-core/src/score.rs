@@ -10,7 +10,7 @@ use std::collections::HashSet;
 
 use rusqlite::Connection;
 
-use crate::cache::{get_cached_entry, is_arch, is_prefer_kana, get_non_arch_posi};
+use crate::cache::{get_cached_entry, get_non_arch_posi, is_arch, is_prefer_kana};
 use crate::chars::{count_char_class, has_kanji, mora_length};
 use crate::conj::{get_conj_data, get_word_conj_data};
 use crate::constants::{SKIP_CONJ_FORMS, WEAK_CONJ_FORMS};
@@ -144,7 +144,7 @@ pub fn skip_by_conj_data(conj_data: &[ConjData]) -> bool {
     conj_data.iter().all(|cd| {
         cd.prop
             .as_ref()
-            .map(|p| matches_conj_form(p, &SKIP_CONJ_FORMS))
+            .map(|p| matches_conj_form(p, SKIP_CONJ_FORMS))
             .unwrap_or(false)
     })
 }
@@ -157,7 +157,7 @@ pub fn is_weak_conj_form(conj_data: &[ConjData]) -> bool {
     conj_data.iter().all(|cd| {
         cd.prop
             .as_ref()
-            .map(|p| matches_conj_form(p, &WEAK_CONJ_FORMS))
+            .map(|p| matches_conj_form(p, WEAK_CONJ_FORMS))
             .unwrap_or(false)
     })
 }
@@ -243,10 +243,13 @@ fn lookup_orig_text(
     } else {
         "SELECT common, ord FROM kana_text WHERE seq = ?1 AND text = ?2 LIMIT 1"
     };
-    conn.query_row(sql, rusqlite::params![from_seq, src_text], |r| {
-        Ok((r.get::<_, Option<i64>>(0)?, r.get::<_, i64>(1)?))
-    })
-    .ok()
+    conn.prepare_cached(sql)
+        .and_then(|mut s| {
+            s.query_row(rusqlite::params![from_seq, src_text], |r| {
+                Ok((r.get::<_, Option<i64>>(0)?, r.get::<_, i64>(1)?))
+            })
+        })
+        .ok()
 }
 
 fn get_original_text_data_recursive(
@@ -274,7 +277,9 @@ fn get_original_text_data_recursive(
         } else {
             let via_conj = get_conj_data(conn, cd.via.unwrap(), Some(cd.from_seq), None, None);
             if !via_conj.is_empty() {
-                result.extend(get_original_text_data_recursive(conn, &via_conj, &src_texts));
+                result.extend(get_original_text_data_recursive(
+                    conn, &via_conj, &src_texts,
+                ));
             }
         }
     }
@@ -328,25 +333,21 @@ fn determine_primary_full_impl(
         }
     }
 
-    if ord_val == 0 || cop_da_p {
-        if (kanji_p || conj_types_p)
-            && ((kanji_p && !prefer_kana)
-                || (common_p && pronoun_p)
-                || entry.n_kanji == 0)
+    if (ord_val == 0 || cop_da_p)
+        && (kanji_p || conj_types_p)
+            && ((kanji_p && !prefer_kana) || (common_p && pronoun_p) || entry.n_kanji == 0)
         {
             return true;
         }
-    }
 
     if prefer_kana && kanji_p && ord_val == 0 {
         // uk on the ord=0 sense blocks primacy
         let first_sense_uk: bool = conn
-            .query_row(
+            .prepare_cached(
                 "SELECT 1 FROM sense_prop sp JOIN sense s ON sp.sense_id = s.id \
                  WHERE s.seq = ?1 AND s.ord = 0 AND sp.tag = 'misc' AND sp.text = 'uk' LIMIT 1",
-                [entry.seq],
-                |_| Ok(()),
             )
+            .and_then(|mut s| s.query_row([entry.seq], |_| Ok(())))
             .is_ok();
         if !first_sense_uk {
             return true;
@@ -439,13 +440,11 @@ pub fn calc_score(
         Vec::new()
     } else if conj_only {
         match word.conjugations() {
-            Conj::Ids(ids) => {
-                get_conj_data(conn, seq, None, Some(ids), Some(&[text.clone()]))
-            }
+            Conj::Ids(ids) => get_conj_data(conn, seq, None, Some(ids), Some(std::slice::from_ref(&text))),
             _ => Vec::new(),
         }
     } else if !word.is_root() {
-        get_conj_data(conn, seq, None, None, Some(&[text.clone()]))
+        get_conj_data(conn, seq, None, None, Some(std::slice::from_ref(&text)))
     } else {
         Vec::new()
     };
@@ -469,7 +468,7 @@ pub fn calc_score(
         || use_length.is_some()
         || !conj_props
             .iter()
-            .all(|p| matches_conj_form(p, &WEAK_CONJ_FORMS));
+            .all(|p| matches_conj_form(p, WEAK_CONJ_FORMS));
 
     // seq_set / sp_seq_set / posi
     let mut seq_set: HashSet<i64> = HashSet::new();
@@ -525,9 +524,8 @@ pub fn calc_score(
     };
     let long_p = word_len > len_threshold;
 
-    let no_common_bonus = particle_p
-        || !conj_types_p
-        || (!long_p && posi.len() == 1 && posi.contains("int"));
+    let no_common_bonus =
+        particle_p || !conj_types_p || (!long_p && posi.len() == 1 && posi.contains("int"));
 
     // Skip-word checks on full seq_set (only for direct matches)
     if use_length.is_none() && !seq_set.is_disjoint(&SKIP_WORDS) {
@@ -546,15 +544,15 @@ pub fn calc_score(
         let orig_texts = get_original_text_data(conn, word, &conj_data);
         if !orig_texts.is_empty() {
             if !common_p {
-                let conj_of_common: Vec<i64> =
-                    orig_texts.iter().filter_map(|(c, _)| *c).collect();
+                let conj_of_common: Vec<i64> = orig_texts.iter().filter_map(|(c, _)| *c).collect();
                 if !conj_of_common.is_empty() {
                     common = Some(0);
                     common_p = true;
                     // Python: sorted(conj_of_common, key=lambda c: (c or 1000, c == 0))[0]
-                    common_of = conj_of_common.iter().copied().min_by_key(|c| {
-                        (if *c == 0 { 1000 } else { *c }, *c == 0)
-                    });
+                    common_of = conj_of_common
+                        .iter()
+                        .copied()
+                        .min_by_key(|c| (if *c == 0 { 1000 } else { *c }, *c == 0));
                 }
             }
             let conj_of_ord = orig_texts.iter().map(|(_, o)| *o).min().unwrap();
@@ -667,10 +665,18 @@ pub fn calc_score(
 
     // prop_score + length multiplier
     prop_score = score;
-    let length_class = if kanji_p || katakana_p { "strong" } else { "weak" };
+    let length_class = if kanji_p || katakana_p {
+        "strong"
+    } else {
+        "weak"
+    };
     score = prop_score
         * (length_multiplier_coeff(word_len, length_class) as f64
-            + if n_kanji > 1 { (n_kanji - 1) as f64 * 5.0 } else { 0.0 });
+            + if n_kanji > 1 {
+                (n_kanji - 1) as f64 * 5.0
+            } else {
+                0.0
+            });
 
     // Split scoring
     let mut split_info: Option<SplitInfo> = None;

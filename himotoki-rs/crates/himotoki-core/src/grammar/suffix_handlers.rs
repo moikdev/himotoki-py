@@ -32,12 +32,14 @@ fn find_word_with_pos(conn: &Connection, word: &str, posi: &[&str]) -> Vec<Word>
         "SELECT 1 FROM sense_prop WHERE seq = ?1 AND tag='pos' AND text IN ({}) LIMIT 1",
         ph
     );
-    let mut stmt = match conn.prepare(&sql) {
+    let mut stmt = match conn.prepare_cached(&sql) {
         Ok(s) => s,
         Err(_) => return Vec::new(),
     };
-    let params: Vec<rusqlite::types::Value> =
-        posi.iter().map(|s| rusqlite::types::Value::from((*s).to_string())).collect();
+    let params: Vec<rusqlite::types::Value> = posi
+        .iter()
+        .map(|s| rusqlite::types::Value::from((*s).to_string()))
+        .collect();
     words
         .into_iter()
         .filter(|w| {
@@ -71,8 +73,7 @@ fn neg_prop_filtered(
         conn,
         word,
         |cd| {
-            cd.prop.as_ref().and_then(|p| p.neg).unwrap_or(false)
-                && !blocked.contains(&cd.from_seq)
+            cd.prop.as_ref().and_then(|p| p.neg).unwrap_or(false) && !blocked.contains(&cd.from_seq)
         },
         allow_root,
     )
@@ -160,11 +161,10 @@ fn h_sou(conn: &Connection, root: &str, _s: &str, _kf: Option<&SuffixKanaForm>) 
         let patched = format!("{}い", &root[..root.len() - 'さ'.len_utf8()]);
         return neg_prop_no_block(conn, &patched);
     }
-    let mut results: Vec<Word> =
-        fwct(conn, root, &[13, CONJ_ADJECTIVE_STEM, CONJ_ADVERBIAL])
-            .into_iter()
-            .filter(|w| w.seq() != Some(10195060))
-            .collect();
+    let mut results: Vec<Word> = fwct(conn, root, &[13, CONJ_ADJECTIVE_STEM, CONJ_ADVERBIAL])
+        .into_iter()
+        .filter(|w| w.seq() != Some(10195060))
+        .collect();
     if results.is_empty() {
         results = find_word_with_pos(conn, root, &["adj-na"]);
     }
@@ -297,7 +297,12 @@ fn h_abbr_nai(conn: &Connection, root: &str, _s: &str, _kf: Option<&SuffixKanaFo
     neg_prop_filtered(conn, &format!("{}ない", root), &BLOCKED_NAI_SEQS, true)
 }
 
-fn h_abbr_nai_n(conn: &Connection, root: &str, _s: &str, _kf: Option<&SuffixKanaForm>) -> Vec<Word> {
+fn h_abbr_nai_n(
+    conn: &Connection,
+    root: &str,
+    _s: &str,
+    _kf: Option<&SuffixKanaForm>,
+) -> Vec<Word> {
     neg_prop_filtered(conn, &format!("{}ない", root), &BLOCKED_NAI_SEQS, false)
 }
 
@@ -319,19 +324,39 @@ fn h_abbr_nx(conn: &Connection, root: &str, _s: &str, _kf: Option<&SuffixKanaFor
     )
 }
 
-fn h_abbr_nakereba(conn: &Connection, root: &str, _s: &str, _kf: Option<&SuffixKanaForm>) -> Vec<Word> {
+fn h_abbr_nakereba(
+    conn: &Connection,
+    root: &str,
+    _s: &str,
+    _kf: Option<&SuffixKanaForm>,
+) -> Vec<Word> {
     crate::lookup::find_word_full(conn, &format!("{}なければ", root), false)
 }
 
-fn h_abbr_shimasho(conn: &Connection, root: &str, _s: &str, _kf: Option<&SuffixKanaForm>) -> Vec<Word> {
+fn h_abbr_shimasho(
+    conn: &Connection,
+    root: &str,
+    _s: &str,
+    _kf: Option<&SuffixKanaForm>,
+) -> Vec<Word> {
     crate::lookup::find_word_full(conn, &format!("{}ましょう", root), false)
 }
 
-fn h_abbr_dewanai(conn: &Connection, root: &str, _s: &str, _kf: Option<&SuffixKanaForm>) -> Vec<Word> {
+fn h_abbr_dewanai(
+    conn: &Connection,
+    root: &str,
+    _s: &str,
+    _kf: Option<&SuffixKanaForm>,
+) -> Vec<Word> {
     crate::lookup::find_word_full(conn, &format!("{}ではない", root), false)
 }
 
-fn h_abbr_eba(conn: &Connection, root: &str, suffix: &str, _kf: Option<&SuffixKanaForm>) -> Vec<Word> {
+fn h_abbr_eba(
+    conn: &Connection,
+    root: &str,
+    suffix: &str,
+    _kf: Option<&SuffixKanaForm>,
+) -> Vec<Word> {
     let full = match suffix {
         "ちゃ" => "てば",
         "りゃ" => "れば",

@@ -26,8 +26,7 @@ pub fn default_db_path() -> PathBuf {
         }
     }
     // Dev-tree data dir: <repo>/data/himotoki.db (manifest is crates/himotoki-core)
-    let dev_db = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../data/himotoki.db");
+    let dev_db = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../data/himotoki.db");
     if dev_db.exists() {
         return dev_db;
     }

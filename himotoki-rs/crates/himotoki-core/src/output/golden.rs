@@ -103,7 +103,7 @@ pub fn path_node_json(node: &PathNode) -> Value {
             "kind": "seglist",
             "start": l.start,
             "end": l.end,
-            "segs": l.segments.iter().map(segment_json).collect::<Vec<_>>(),
+            "segs": l.segments.iter().map(|s| segment_json(s)).collect::<Vec<_>>(),
         }),
         PathNode::Syn(s) => json!({
             "kind": "syn",
@@ -124,7 +124,7 @@ pub fn candidates_record(i: usize, text: &str, lists: &[SegmentList]) -> Value {
             "start": sl.start,
             "end": sl.end,
             "matches": sl.matches,
-            "segs": sl.segments.iter().map(segment_json).collect::<Vec<_>>(),
+            "segs": sl.segments.iter().map(|s| segment_json(s)).collect::<Vec<_>>(),
         })).collect::<Vec<_>>(),
     })
 }

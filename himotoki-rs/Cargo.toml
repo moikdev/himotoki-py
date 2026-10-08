@@ -4,6 +4,8 @@ members = [
     "crates/himotoki-core",
     "crates/himotoki-cli",
     "crates/xtask",
+    "crates/himotoki-py",
+    "crates/himotoki-load",
 ]
 
 [workspace.dependencies]

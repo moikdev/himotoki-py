@@ -21,7 +21,16 @@ use crate::types::{PathNode, Segment, SegmentList, Word};
 // ============================================================================
 
 const MODIFIER_CLASSES: &[&str] = &[
-    "+a", "+i", "+u", "+e", "+o", "+ya", "+yu", "+yo", "+wa", "long_vowel",
+    "+a",
+    "+i",
+    "+u",
+    "+e",
+    "+o",
+    "+ya",
+    "+yu",
+    "+yo",
+    "+wa",
+    "long_vowel",
 ];
 const ITERATION_CLASSES: &[&str] = &["iter", "iter_v"];
 
@@ -85,11 +94,12 @@ impl TopArray {
         let mut idx = self.count.min(self.limit) as i64;
         while idx >= 0 {
             let i = idx as usize;
-            let prev_item = if i > 0 { self.array[i - 1].clone() } else { None };
-            let done = prev_item
-                .as_ref()
-                .map(|p| p.score >= score)
-                .unwrap_or(true);
+            let prev_item = if i > 0 {
+                self.array[i - 1].clone()
+            } else {
+                None
+            };
+            let done = prev_item.as_ref().map(|p| p.score >= score).unwrap_or(true);
             if i < self.limit {
                 self.array[i] = if done { item.clone() } else { prev_item };
             }
@@ -151,11 +161,10 @@ pub fn find_sticky_positions(text: &str) -> Vec<usize> {
         } else if is_modifier_class(char_class) || is_iteration_class(char_class) {
             let at_end = pos == text_len - 1;
             if !at_end {
-                if pos > 0 && char_class == Some("long_vowel") {
-                    if is_long_vowel_modifier(chars[pos - 1]) {
+                if pos > 0 && char_class == Some("long_vowel")
+                    && is_long_vowel_modifier(chars[pos - 1]) {
                         continue;
                     }
-                }
                 sticky.push(pos);
             }
         }
@@ -180,9 +189,7 @@ pub fn consecutive_char_groups(char_type: &str, text: &str) -> Vec<(usize, usize
                 // the literal set {ァ, -, ヺ, ヽ, ヾ, ー} (ASCII '-' included).
                 matches!(c, 'ァ' | '-' | 'ヺ' | 'ヽ' | 'ヾ' | 'ー') || {
                     match get_char_class(c) {
-                        Some(cls) if is_kana_class(Some(cls)) => {
-                            kana_class_last(cls) == Some(c)
-                        }
+                        Some(cls) if is_kana_class(Some(cls)) => kana_class_last(cls) == Some(c),
                         _ => false,
                     }
                 }
@@ -222,6 +229,8 @@ pub fn find_substring_words(
     let mut kanji_keys: Vec<String> = Vec::new();
     let mut all_substrings: Vec<String> = Vec::new();
 
+    let prof = std::env::var("HIMOTOKI_PROFILE").is_ok();
+    let t0 = std::time::Instant::now();
     let chars: Vec<char> = text.chars().collect();
     let text_len = chars.len();
     for start in 0..text_len {
@@ -248,16 +257,23 @@ pub fn find_substring_words(
             }
         }
     }
+    let t_substr = t0.elapsed();
 
     // Batch queries
+    let t1 = std::time::Instant::now();
     if !kana_keys.is_empty() {
-        let unique: Vec<String> = kana_keys.iter().cloned().collect::<HashSet<_>>().into_iter().collect();
+        let unique: Vec<String> = kana_keys
+            .iter()
+            .cloned()
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
         let ph = unique.iter().map(|_| "?").collect::<Vec<_>>().join(",");
         let sql = format!(
             "SELECT id, seq, text, ord, common, best_kanji FROM kana_text WHERE text IN ({})",
             ph
         );
-        if let Ok(mut stmt) = conn.prepare(&sql) {
+        if let Ok(mut stmt) = conn.prepare_cached(&sql) {
             let params: Vec<rusqlite::types::Value> =
                 unique.iter().map(|s| s.clone().into()).collect();
             if let Ok(rows) = stmt.query_map(rusqlite::params_from_iter(params), |r| {
@@ -283,13 +299,18 @@ pub fn find_substring_words(
         }
     }
     if !kanji_keys.is_empty() {
-        let unique: Vec<String> = kanji_keys.iter().cloned().collect::<HashSet<_>>().into_iter().collect();
+        let unique: Vec<String> = kanji_keys
+            .iter()
+            .cloned()
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
         let ph = unique.iter().map(|_| "?").collect::<Vec<_>>().join(",");
         let sql = format!(
             "SELECT id, seq, text, ord, common, best_kana FROM kanji_text WHERE text IN ({})",
             ph
         );
-        if let Ok(mut stmt) = conn.prepare(&sql) {
+        if let Ok(mut stmt) = conn.prepare_cached(&sql) {
             let params: Vec<rusqlite::types::Value> =
                 unique.iter().map(|s| s.clone().into()).collect();
             if let Ok(rows) = stmt.query_map(rusqlite::params_from_iter(params), |r| {
@@ -315,12 +336,17 @@ pub fn find_substring_words(
         }
     }
 
+    let t_batch = t1.elapsed();
+
     // Suffix compounds for every substring (not in trie).
+    let t2 = std::time::Instant::now();
+    let mut n_suffix_checked = 0usize;
     if is_suffix_cache_ready() {
         for substring in &all_substrings {
             if !could_have_suffix(substring) {
                 continue;
             }
+            n_suffix_checked += 1;
             let suffix_results = find_word_suffix(conn, substring, &[], None, None, 0);
             if !suffix_results.is_empty() {
                 substring_map
@@ -329,6 +355,16 @@ pub fn find_substring_words(
                     .extend(suffix_results);
             }
         }
+    }
+    if prof {
+        eprintln!(
+            "  fsw: substr={:?}({}) batch={:?} suffix={:?}({} checked)",
+            t_substr,
+            all_substrings.len(),
+            t_batch,
+            t2.elapsed(),
+            n_suffix_checked
+        );
     }
 
     substring_map
@@ -412,7 +448,10 @@ pub fn join_substring_words(
     text: &str,
     index: Option<&WordIndex>,
 ) -> Vec<SegmentList> {
+    let prof = std::env::var("HIMOTOKI_PROFILE").is_ok();
+    let t0 = std::time::Instant::now();
     let (results, kanji_break) = join_substring_words_impl(conn, text, index);
+    let t_impl = t0.elapsed();
     let mut segment_lists = Vec::new();
 
     let ends_with_long_vowel = text.ends_with('ー');
@@ -432,6 +471,7 @@ pub fn join_substring_words(
         crate::cache::preload_scoring_caches(conn, &all_seqs);
     }
 
+    let t1 = std::time::Instant::now();
     let kb_set: HashSet<usize> = kanji_break.iter().copied().collect();
     for (start, end, segments) in results {
         let kb: Vec<usize> = [start, end]
@@ -462,8 +502,15 @@ pub fn join_substring_words(
                 culled.into_iter().partition(|s| s.word.is_compound());
             let mut ordered = compound_segs;
             ordered.extend(dict_segs);
-            segment_lists.push(SegmentList::new(ordered, start, end, matches_n));
+            segment_lists.push(SegmentList::from_owned(ordered, start, end, matches_n));
         }
+    }
+    if prof {
+        eprintln!(
+            "  join_breakdown: impl={:?} score_loop={:?}",
+            t_impl,
+            t1.elapsed()
+        );
     }
     segment_lists
 }
@@ -563,8 +610,7 @@ pub fn find_best_path(
                     continue;
                 }
                 let seg_left_node = tai.payload[0].clone();
-                let tail: Vec<Rc<PathNode>> =
-                    tai.payload.iter().skip(1).cloned().collect();
+                let tail: Vec<Rc<PathNode>> = tai.payload.iter().skip(1).cloned().collect();
                 let score3 = get_segment_score(&seg_left_node);
                 let score_tail = tai.score - score3;
 
@@ -574,11 +620,9 @@ pub fn find_best_path(
                 };
                 let splits = get_segment_splits(&seg_left_list, seg2);
                 for split in splits {
-                    let split_score: f64 =
-                        split.iter().map(|s| get_segment_score(s)).sum();
-                    let accum = gap_mid
-                        + split_score.max(score3 + 1.0).max(score2 + 1.0)
-                        + score_tail;
+                    let split_score: f64 = split.iter().map(|s| get_segment_score(s)).sum();
+                    let accum =
+                        gap_mid + split_score.max(score3 + 1.0).max(score2 + 1.0) + score_tail;
                     let mut new_path = split;
                     new_path.extend(tail.iter().cloned());
 
@@ -614,11 +658,24 @@ pub fn segment_text(
     if text.is_empty() {
         return Vec::new();
     }
+    let prof = std::env::var("HIMOTOKI_PROFILE").is_ok();
+    let t0 = std::time::Instant::now();
     let mut segment_lists = join_substring_words(conn, text, index);
+    let t_js = t0.elapsed();
     if segment_lists.is_empty() {
         return Vec::new();
     }
-    find_best_path(&mut segment_lists, text.chars().count(), limit)
+    let t1 = std::time::Instant::now();
+    let out = find_best_path(&mut segment_lists, text.chars().count(), limit);
+    if prof {
+        eprintln!(
+            "PROF {:?}: join={:?} bestpath={:?}",
+            text,
+            t_js,
+            t1.elapsed()
+        );
+    }
+    out
 }
 
 /// `simple_segment` — best path's segments (flattened; Syn nodes skipped).

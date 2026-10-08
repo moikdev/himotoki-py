@@ -69,15 +69,15 @@ fn build_from_db(conn: &rusqlite::Connection, fst_path: &Path) -> rusqlite::Resu
     let mut iter = words.into_iter().peekable();
     // FST requires sorted insert — BTreeSet iteration is sorted.
     let mut keys = Vec::with_capacity(iter.len());
-    while let Some(w) = iter.next() {
+    for w in iter {
         keys.push(w);
     }
-    builder.extend_iter(keys).map_err(|e| {
-        rusqlite::Error::ToSqlConversionFailure(Box::new(e))
-    })?;
-    let bytes = builder.into_inner().map_err(|e| {
-        rusqlite::Error::ToSqlConversionFailure(Box::new(e))
-    })?;
+    builder
+        .extend_iter(keys)
+        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+    let bytes = builder
+        .into_inner()
+        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
     let _ = std::fs::write(fst_path, &bytes);
     Set::new(bytes).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))
 }

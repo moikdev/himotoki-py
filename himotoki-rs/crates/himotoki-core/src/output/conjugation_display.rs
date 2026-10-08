@@ -4,10 +4,7 @@
 use rusqlite::Connection;
 
 use crate::conj::get_conj_data;
-use crate::constants::{
-    conj_step_gloss, conj_type_name, CONJ_CAUSATIVE,
-    CONJ_CAUSATIVE_PASSIVE,
-};
+use crate::constants::{conj_step_gloss, conj_type_name, CONJ_CAUSATIVE, CONJ_CAUSATIVE_PASSIVE};
 use crate::db::rows::ConjugationRow;
 use crate::grammar::suffixes::get_suffix_description;
 use crate::output::meanings::get_entry_reading;
@@ -33,8 +30,7 @@ pub fn get_conjugation_display(conn: &Connection, wi: &WordInfo) -> Vec<String> 
             if let Some(Conj::Ids(ids)) = &alt.conjugations {
                 if !ids.is_empty() && alt.has_seq() {
                     if let Some(seq) = alt.first_seq() {
-                        let mut lines =
-                            format_conjugation_info(conn, seq, Some(ids));
+                        let mut lines = format_conjugation_info(conn, seq, Some(ids));
                         if wi.text == "ではない" {
                             lines = lines
                                 .into_iter()
@@ -136,8 +132,10 @@ fn get_compound_display(conn: &Connection, wi: &WordInfo) -> Vec<String> {
                 if let Some(pseq) = first_seq(primary) {
                     result.push(format!("  ← {}", get_entry_reading(conn, pseq)));
                 }
-                let stem_kana: String =
-                    primary_kana.chars().take(primary_kana.chars().count() - 1).collect();
+                let stem_kana: String = primary_kana
+                    .chars()
+                    .take(primary_kana.chars().count() - 1)
+                    .collect();
                 result.push(format!("  └─ Adjective Stem ({}): stem", stem_kana));
                 depth = 1;
             }
@@ -157,10 +155,7 @@ fn get_compound_display(conn: &Connection, wi: &WordInfo) -> Vec<String> {
                 if aux_name.as_deref() == Some("する") && primary_chain.is_empty() {
                     let primary_kana = first_kana(primary);
                     if !primary.text.is_empty() && primary.text != primary_kana {
-                        result.push(format!(
-                            "  ← {}する 【{}する】",
-                            primary.text, primary_kana
-                        ));
+                        result.push(format!("  ← {}する 【{}する】", primary.text, primary_kana));
                     } else {
                         result.push(format!("  ← {}する", primary_kana));
                     }
@@ -212,16 +207,11 @@ fn get_compound_display(conn: &Connection, wi: &WordInfo) -> Vec<String> {
             if comp_kana == "する" && primary_chain.is_empty() {
                 let primary_kana = first_kana(primary);
                 if !primary.text.is_empty() && primary.text != primary_kana {
-                    result.push(format!(
-                        "  ← {}する 【{}する】",
-                        primary.text, primary_kana
-                    ));
+                    result.push(format!("  ← {}する 【{}する】", primary.text, primary_kana));
                 } else {
                     result.push(format!("  ← {}する", primary_kana));
                 }
-            } else if (comp_kana == "いる" || comp_kana == "おる")
-                && last_line_is_te(&result)
-            {
+            } else if (comp_kana == "いる" || comp_kana == "おる") && last_line_is_te(&result) {
                 relabel_te_progressive(&mut result);
             } else {
                 result.push(format!("  {}└─ {}{}", indent, comp_kana, desc_str));
@@ -261,10 +251,7 @@ fn last_line_is_te(result: &[String]) -> bool {
 fn relabel_te_progressive(result: &mut [String]) {
     for line in result.iter_mut().rev() {
         if line.contains("Conjunctive (~te)") {
-            *line = line.replace(
-                "Conjunctive (~te)",
-                "Conjunctive (~te, progressive)",
-            );
+            *line = line.replace("Conjunctive (~te)", "Conjunctive (~te, progressive)");
             return;
         }
     }
@@ -298,7 +285,7 @@ pub fn format_conjugation_info(
     };
 
     let conjs: Vec<ConjugationRow> = conn
-        .prepare(&sql)
+        .prepare_cached(&sql)
         .and_then(|mut s| {
             s.query_map(rusqlite::params_from_iter(params), |r| {
                 Ok(ConjugationRow {
@@ -314,7 +301,9 @@ pub fn format_conjugation_info(
 
     for conj in conjs.iter().take(1) {
         let props: Vec<crate::db::rows::ConjPropRow> = conn
-            .prepare("SELECT id, conj_id, conj_type, pos, neg, fml FROM conj_prop WHERE conj_id = ?1")
+            .prepare_cached(
+                "SELECT id, conj_id, conj_type, pos, neg, fml FROM conj_prop WHERE conj_id = ?1",
+            )
             .and_then(|mut s| {
                 s.query_map([conj.id], |r| {
                     Ok(crate::db::rows::ConjPropRow {
@@ -333,8 +322,7 @@ pub fn format_conjugation_info(
         for prop in props.iter().take(1) {
             let steps = build_conj_chain(conn, conj, prop);
             if !steps.is_empty() {
-                let root_reading =
-                    get_entry_reading(conn, conj.from_seq);
+                let root_reading = get_entry_reading(conn, conj.from_seq);
                 result.push(format!("  ← {}", root_reading));
                 let mut current_depth = 0usize;
                 for step in &steps {
@@ -367,8 +355,11 @@ pub fn format_conjugation_info(
                         }
                         current_depth += 1;
                     } else if step.fml {
-                        let polite_morpheme =
-                            if step.suffix.starts_with('で') { "です" } else { "ます" };
+                        let polite_morpheme = if step.suffix.starts_with('で') {
+                            "です"
+                        } else {
+                            "ます"
+                        };
                         result.push(format!("  {}└─ Polite ({})", indent, polite_morpheme));
                         current_depth += 1;
                         if step.conj_type != "Non-past" || step.neg {
@@ -381,20 +372,13 @@ pub fn format_conjugation_info(
                             }
                             if step.neg {
                                 if step.conj_type == "Non-past" {
-                                    result.push(format!(
-                                        "  {}└─ Negative ({}): not",
-                                        indent, suffix
-                                    ));
+                                    result
+                                        .push(format!("  {}└─ Negative ({}): not", indent, suffix));
                                     current_depth += 1;
-                                } else if suffix.starts_with("せん")
-                                    && suffix.chars().count() > 2
+                                } else if suffix.starts_with("せん") && suffix.chars().count() > 2
                                 {
-                                    let conj_suffix =
-                                        suffix["せん".len()..].to_string();
-                                    result.push(format!(
-                                        "  {}└─ Negative (せん): not",
-                                        indent
-                                    ));
+                                    let conj_suffix = suffix["せん".len()..].to_string();
+                                    result.push(format!("  {}└─ Negative (せん): not", indent));
                                     current_depth += 1;
                                     let indent = "     ".repeat(current_depth);
                                     let gloss_str = if step.gloss.is_empty() {
@@ -449,7 +433,9 @@ pub fn format_conjugation_info(
                             const GODAN_POTENTIAL: &[char] =
                                 &['え', 'け', 'せ', 'て', 'ね', 'へ', 'め', 'げ'];
                             let first_char = suffix.chars().next();
-                            if !first_char.map(|c| GODAN_POTENTIAL.contains(&c)).unwrap_or(false)
+                            if !first_char
+                                .map(|c| GODAN_POTENTIAL.contains(&c))
+                                .unwrap_or(false)
                             {
                                 type_label = "Potential/Passive".to_string();
                                 gloss = "can do / is done (to)".to_string();
@@ -457,14 +443,10 @@ pub fn format_conjugation_info(
                         }
                         if step.neg {
                             if type_label == "Non-past" {
-                                result.push(format!(
-                                    "  {}└─ Negative ({}): not",
-                                    indent, suffix
-                                ));
+                                result.push(format!("  {}└─ Negative ({}): not", indent, suffix));
                                 current_depth += 1;
                             } else if suffix.ends_with("ない") {
-                                let conj_suffix =
-                                    suffix[..suffix.len() - "ない".len()].to_string();
+                                let conj_suffix = suffix[..suffix.len() - "ない".len()].to_string();
                                 let gloss_str = if gloss.is_empty() {
                                     String::new()
                                 } else {
@@ -476,17 +458,11 @@ pub fn format_conjugation_info(
                                 ));
                                 current_depth += 1;
                                 let indent = "     ".repeat(current_depth);
-                                result.push(format!(
-                                    "  {}└─ Negative (ない): not",
-                                    indent
-                                ));
+                                result.push(format!("  {}└─ Negative (ない): not", indent));
                                 current_depth += 1;
                             } else {
                                 let (neg_part, conj_part) = split_neg_suffix(&suffix);
-                                result.push(format!(
-                                    "  {}└─ Negative ({}): not",
-                                    indent, neg_part
-                                ));
+                                result.push(format!("  {}└─ Negative ({}): not", indent, neg_part));
                                 current_depth += 1;
                                 if !conj_part.is_empty() {
                                     let indent = "     ".repeat(current_depth);
@@ -532,10 +508,7 @@ pub fn format_conjugation_info(
                     "  ← [{}] {}{}{}",
                     prop.pos, type_desc, neg_str, fml_str
                 ));
-                result.push(format!(
-                    "     {}",
-                    get_entry_reading(conn, conj.from_seq)
-                ));
+                result.push(format!("     {}", get_entry_reading(conn, conj.from_seq)));
             }
         }
     }
@@ -571,12 +544,7 @@ fn build_conj_chain(
 }
 
 /// `_collect_via_steps`.
-fn collect_via_steps(
-    conn: &Connection,
-    via_seq: i64,
-    from_seq: i64,
-    steps: &mut Vec<ConjStep>,
-) {
+fn collect_via_steps(conn: &Connection, via_seq: i64, from_seq: i64, steps: &mut Vec<ConjStep>) {
     let via_data = get_conj_data(conn, via_seq, Some(from_seq), None, None);
     let cd = match via_data.into_iter().next() {
         Some(cd) => cd,
@@ -637,7 +605,7 @@ fn get_conj_suffix(
     prop: &crate::db::rows::ConjPropRow,
 ) -> String {
     let src_readings: Vec<(String, String)> = conn
-        .prepare("SELECT text, source_text FROM conj_source_reading WHERE conj_id = ?1")
+        .prepare_cached("SELECT text, source_text FROM conj_source_reading WHERE conj_id = ?1")
         .and_then(|mut s| {
             s.query_map([conj.id], |r| Ok((r.get(0)?, r.get(1)?)))
                 .map(|rows| rows.flatten().collect())
@@ -648,8 +616,7 @@ fn get_conj_suffix(
         return String::new();
     }
 
-    let prefer_long =
-        prop.conj_type == CONJ_CAUSATIVE || prop.conj_type == CONJ_CAUSATIVE_PASSIVE;
+    let prefer_long = prop.conj_type == CONJ_CAUSATIVE || prop.conj_type == CONJ_CAUSATIVE_PASSIVE;
     let mut best_suffix: Option<String> = None;
     for (text, src) in &src_readings {
         let suffix = extract_suffix(text, src);
@@ -677,8 +644,7 @@ fn get_conj_suffix(
 fn split_neg_suffix(suffix: &str) -> (String, String) {
     for ending in ["かったら", "かった", "ければ", "くて"] {
         if suffix.ends_with(ending) {
-            let neg_part =
-                format!("{}い", &suffix[..suffix.len() - ending.len()]);
+            let neg_part = format!("{}い", &suffix[..suffix.len() - ending.len()]);
             return (neg_part, ending.to_string());
         }
     }

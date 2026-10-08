@@ -57,20 +57,18 @@ fn with_state_mut<R>(f: impl FnOnce(&mut SuffixState) -> R) -> R {
 }
 
 fn update_cache(text: &str, value: SuffixValue, join: bool) {
-    with_state_mut(|s| {
-        match s.cache.get_mut(text) {
-            None => {
-                s.cache.insert(text.to_string(), vec![value]);
-                if let Some(last) = text.chars().last() {
-                    s.ending_chars.insert(last);
-                }
+    with_state_mut(|s| match s.cache.get_mut(text) {
+        None => {
+            s.cache.insert(text.to_string(), vec![value]);
+            if let Some(last) = text.chars().last() {
+                s.ending_chars.insert(last);
             }
-            Some(v) => {
-                if join {
-                    v.push(value);
-                } else {
-                    *v = vec![value];
-                }
+        }
+        Some(v) => {
+            if join {
+                v.push(value);
+            } else {
+                *v = vec![value];
             }
         }
     });
@@ -83,7 +81,7 @@ fn update_cache(text: &str, value: SuffixValue, join: bool) {
 fn get_kana_forms(conn: &Connection, seq: i64) -> Vec<SuffixKanaForm> {
     let mut out = Vec::new();
     let direct_sql = "SELECT id, seq, text, ord, common, best_kanji FROM kana_text WHERE seq = ?1";
-    if let Ok(mut stmt) = conn.prepare(direct_sql) {
+    if let Ok(mut stmt) = conn.prepare_cached(direct_sql) {
         if let Ok(rows) = stmt.query_map([seq], |r| {
             Ok(KanaTextRow {
                 id: r.get(0)?,
@@ -96,13 +94,16 @@ fn get_kana_forms(conn: &Connection, seq: i64) -> Vec<SuffixKanaForm> {
             })
         }) {
             for r in rows.flatten() {
-                out.push(SuffixKanaForm { row: r, is_conj: false });
+                out.push(SuffixKanaForm {
+                    row: r,
+                    is_conj: false,
+                });
             }
         }
     }
     // Kana for conjugations of seq
     let conj_seqs: Vec<i64> = conn
-        .prepare("SELECT seq FROM conjugation WHERE \"from\" = ?1")
+        .prepare_cached("SELECT seq FROM conjugation WHERE \"from\" = ?1")
         .and_then(|mut s| {
             s.query_map([seq], |r| r.get::<_, i64>(0))
                 .map(|rows| rows.flatten().collect())
@@ -114,7 +115,7 @@ fn get_kana_forms(conn: &Connection, seq: i64) -> Vec<SuffixKanaForm> {
             "SELECT id, seq, text, ord, common, best_kanji FROM kana_text WHERE seq IN ({})",
             ph
         );
-        if let Ok(mut stmt) = conn.prepare(&sql) {
+        if let Ok(mut stmt) = conn.prepare_cached(&sql) {
             let params: Vec<rusqlite::types::Value> =
                 conj_seqs.iter().map(|i| (*i).into()).collect();
             if let Ok(rows) = stmt.query_map(rusqlite::params_from_iter(params), |r| {
@@ -129,7 +130,10 @@ fn get_kana_forms(conn: &Connection, seq: i64) -> Vec<SuffixKanaForm> {
                 })
             }) {
                 for r in rows.flatten() {
-                    out.push(SuffixKanaForm { row: r, is_conj: true });
+                    out.push(SuffixKanaForm {
+                        row: r,
+                        is_conj: true,
+                    });
                 }
             }
         }
@@ -138,26 +142,37 @@ fn get_kana_forms(conn: &Connection, seq: i64) -> Vec<SuffixKanaForm> {
 }
 
 fn get_kana_form(conn: &Connection, seq: i64, text: &str, conj: bool) -> Option<SuffixKanaForm> {
-    conn.query_row(
+    conn.prepare_cached(
         "SELECT id, seq, text, ord, common, best_kanji FROM kana_text WHERE seq = ?1 AND text = ?2 LIMIT 1",
-        rusqlite::params![seq, text],
-        |r| {
-            Ok(KanaTextRow {
-                id: r.get(0)?,
-                seq: r.get(1)?,
-                text: r.get(2)?,
-                ord: r.get(3)?,
-                common: r.get(4)?,
-                best_kanji: r.get(5)?,
-                ..Default::default()
-            })
-        },
     )
+    .and_then(|mut s| {
+        s.query_row(
+            rusqlite::params![seq, text],
+            |r| {
+                Ok(KanaTextRow {
+                    id: r.get(0)?,
+                    seq: r.get(1)?,
+                    text: r.get(2)?,
+                    ord: r.get(3)?,
+                    common: r.get(4)?,
+                    best_kanji: r.get(5)?,
+                    ..Default::default()
+                })
+            },
+        )
+    })
     .ok()
     .map(|row| SuffixKanaForm { row, is_conj: conj })
 }
 
-fn load_conjs(conn: &Connection, key: &str, seq: i64, suffix_class: Option<&str>, join: bool, include_kanji: bool) {
+fn load_conjs(
+    conn: &Connection,
+    key: &str,
+    seq: i64,
+    suffix_class: Option<&str>,
+    join: bool,
+    include_kanji: bool,
+) {
     let actual_class = suffix_class.unwrap_or(key).to_string();
     for kf in get_kana_forms(conn, seq) {
         update_cache(&kf.row.text, (key.to_string(), Some(kf.clone())), join);
@@ -166,7 +181,7 @@ fn load_conjs(conn: &Connection, key: &str, seq: i64, suffix_class: Option<&str>
         });
         if include_kanji {
             let kanji_texts: Vec<String> = conn
-                .prepare("SELECT text FROM kanji_text WHERE seq = ?1")
+                .prepare_cached("SELECT text FROM kanji_text WHERE seq = ?1")
                 .and_then(|mut st| {
                     st.query_map([kf.row.seq], |r| r.get::<_, String>(0))
                         .map(|rows| rows.flatten().collect())
@@ -181,7 +196,13 @@ fn load_conjs(conn: &Connection, key: &str, seq: i64, suffix_class: Option<&str>
     }
 }
 
-fn load_kf(key: &str, kf: &SuffixKanaForm, suffix_class: Option<&str>, text: Option<&str>, join: bool) {
+fn load_kf(
+    key: &str,
+    kf: &SuffixKanaForm,
+    suffix_class: Option<&str>,
+    text: Option<&str>,
+    join: bool,
+) {
     let actual_text = text.unwrap_or(&kf.row.text).to_string();
     let actual_class = suffix_class.unwrap_or(key).to_string();
     update_cache(&actual_text, (key.to_string(), Some(kf.clone())), join);
@@ -373,9 +394,15 @@ pub fn init_suffixes(conn: &Connection, reset: bool) {
 
     // くれる/もらう/いただく/みる/あげる/ほしい/やる/まいる/くださる/さしあげる
     for (seq, cls) in [
-        (SEQ_KURERU, "kureru"), (SEQ_MORAU, "morau"), (SEQ_ITADAKU, "itadaku"),
-        (SEQ_MIRU, "miru"), (SEQ_AGERU, "ageru"), (SEQ_HOSHII, "hoshii"),
-        (SEQ_YARU, "yaru"), (SEQ_MAIRU, "mairu"), (SEQ_KUDASARU, "kudasaru"),
+        (SEQ_KURERU, "kureru"),
+        (SEQ_MORAU, "morau"),
+        (SEQ_ITADAKU, "itadaku"),
+        (SEQ_MIRU, "miru"),
+        (SEQ_AGERU, "ageru"),
+        (SEQ_HOSHII, "hoshii"),
+        (SEQ_YARU, "yaru"),
+        (SEQ_MAIRU, "mairu"),
+        (SEQ_KUDASARU, "kudasaru"),
         (SEQ_SASHIAGERU, "sashiageru"),
     ] {
         load_conjs(conn, "te+space", seq, Some(cls), false, false);
@@ -554,7 +581,10 @@ pub fn init_suffixes(conn: &Connection, reset: bool) {
         .ok();
     if let Some(nk) = naku_kf {
         // Python loads via _load_kf — _conj_type never set → suffix word gets no conj ids
-        let nkf = SuffixKanaForm { row: nk, is_conj: false };
+        let nkf = SuffixKanaForm {
+            row: nk,
+            is_conj: false,
+        };
         load_kf("neg", &nkf, Some("nai"), None, false);
     }
 
@@ -659,44 +689,54 @@ pub fn could_have_suffix(word: &str) -> bool {
 
 /// `get_suffix_map` — end position → (suffix_text, keyword, kf).
 /// Positions are char offsets.
-pub fn get_suffix_map(conn: &Connection, text: &str) -> HashMap<usize, Vec<(String, String, Option<SuffixKanaForm>)>> {
+pub fn get_suffix_map(
+    conn: &Connection,
+    text: &str,
+) -> HashMap<usize, Vec<(String, String, Option<SuffixKanaForm>)>> {
     init_suffixes(conn, false);
     let chars: Vec<char> = text.chars().collect();
     let n = chars.len();
     let mut result: HashMap<usize, Vec<(String, String, Option<SuffixKanaForm>)>> = HashMap::new();
-    let cache_snapshot = with_state(|s| s.cache.clone()).unwrap_or_default();
-    for start in 0..n {
-        for end in (start + 1)..=n {
-            let substr: String = chars[start..end].iter().collect();
-            if let Some(vals) = cache_snapshot.get(&substr) {
-                for (keyword, kf) in vals {
-                    result
-                        .entry(end)
-                        .or_default()
-                        .push((substr.clone(), keyword.clone(), kf.clone()));
+    with_state(|s| {
+        for start in 0..n {
+            for end in (start + 1)..=n {
+                let substr: String = chars[start..end].iter().collect();
+                if let Some(vals) = s.cache.get(substr.as_str()) {
+                    for (keyword, kf) in vals {
+                        result.entry(end).or_default().push((
+                            substr.clone(),
+                            keyword.clone(),
+                            kf.clone(),
+                        ));
+                    }
                 }
             }
         }
-    }
+    });
     result
 }
 
 /// `get_suffixes` — suffix matches scanning backwards (char-indexed).
-pub fn get_suffixes(conn: &Connection, word: &str) -> Vec<(String, String, Option<SuffixKanaForm>)> {
+pub fn get_suffixes(
+    conn: &Connection,
+    word: &str,
+) -> Vec<(String, String, Option<SuffixKanaForm>)> {
     init_suffixes(conn, false);
     let chars: Vec<char> = word.chars().collect();
     let n = chars.len();
-    let mut results = Vec::new();
-    let cache_snapshot = with_state(|s| s.cache.clone()).unwrap_or_default();
-    for start in (1..n).rev() {
-        let substr: String = chars[start..].iter().collect();
-        if let Some(vals) = cache_snapshot.get(&substr) {
-            for (keyword, kf) in vals {
-                results.push((substr.clone(), keyword.clone(), kf.clone()));
+    with_state(|s| {
+        let mut results = Vec::new();
+        for start in (1..n).rev() {
+            let substr: String = chars[start..].iter().collect();
+            if let Some(vals) = s.cache.get(substr.as_str()) {
+                for (keyword, kf) in vals {
+                    results.push((substr.clone(), keyword.clone(), kf.clone()));
+                }
             }
         }
-    }
-    results
+        results
+    })
+    .unwrap_or_default()
 }
 
 // ============================================================================
@@ -704,8 +744,8 @@ pub fn get_suffixes(conn: &Connection, word: &str) -> Vec<(String, String, Optio
 // ============================================================================
 
 pub static SUFFIX_UNIQUE_ONLY: &[&str] = &[
-    "ra", "mo", "nikui", "gai", "nai-n", "dewanai", "eba", "teba", "reba",
-    "keba", "geba", "neba", "beba", "meba", "seba", "ii",
+    "ra", "mo", "nikui", "gai", "nai-n", "dewanai", "eba", "teba", "reba", "keba", "geba", "neba",
+    "beba", "meba", "seba", "ii",
 ];
 
 lazy_set! {
@@ -715,14 +755,27 @@ lazy_set! {
 }
 
 pub static ABBREVIATION_SUFFIXES: &[&str] = &[
-    "nai", "nai-x", "nai-n", "nakereba", "shimashou", "dewanai",
-    "teba", "reba", "keba", "geba", "neba", "beba", "meba", "seba", "ii",
+    "nai",
+    "nai-x",
+    "nai-n",
+    "nakereba",
+    "shimashou",
+    "dewanai",
+    "teba",
+    "reba",
+    "keba",
+    "geba",
+    "neba",
+    "beba",
+    "meba",
+    "seba",
+    "ii",
 ];
 
 fn abbreviation_stem(keyword: &str) -> usize {
     match keyword {
-        "nai" | "nai-x" | "nai-n" | "teba" | "reba" | "keba" | "geba" | "neba"
-        | "beba" | "meba" | "seba" | "ii" => 2,
+        "nai" | "nai-x" | "nai-n" | "teba" | "reba" | "keba" | "geba" | "neba" | "beba"
+        | "meba" | "seba" | "ii" => 2,
         "nakereba" | "shimashou" | "dewanai" => 4,
         _ => 0,
     }
@@ -730,14 +783,38 @@ fn abbreviation_stem(keyword: &str) -> usize {
 
 fn suffix_score(keyword: &str) -> f64 {
     match keyword {
-        "tai" => 5.0, "ren" => 5.0, "ren+" => 10.0, "ren-" => 0.0,
-        "neg" => 5.0, "te" => 0.0, "teiru" => 3.0, "teiru+" => 6.0,
-        "te+space" => 3.0, "teren" => 4.0, "teii" => 1.0, "chau" => 5.0,
-        "to" => 0.0, "suru" => 5.0, "sou" => 60.0, "sou+" => 1.0,
-        "adv" => 1.0, "sugiru" => 5.0, "sa" => 2.0, "iadj" => 1.0,
-        "mi" => 1.0, "garu" => 0.0, "ra" => 1.0, "rashii" => 3.0,
-        "ppoi" => 3.0, "tachi" => 3.0, "desu" => 200.0, "tosuru" => 3.0,
-        "kurai" => 3.0, "nai" => 5.0, "kudasai" => 360.0, "nade" => 3.0,
+        "tai" => 5.0,
+        "ren" => 5.0,
+        "ren+" => 10.0,
+        "ren-" => 0.0,
+        "neg" => 5.0,
+        "te" => 0.0,
+        "teiru" => 3.0,
+        "teiru+" => 6.0,
+        "te+space" => 3.0,
+        "teren" => 4.0,
+        "teii" => 1.0,
+        "chau" => 5.0,
+        "to" => 0.0,
+        "suru" => 5.0,
+        "sou" => 60.0,
+        "sou+" => 1.0,
+        "adv" => 1.0,
+        "sugiru" => 5.0,
+        "sa" => 2.0,
+        "iadj" => 1.0,
+        "mi" => 1.0,
+        "garu" => 0.0,
+        "ra" => 1.0,
+        "rashii" => 3.0,
+        "ppoi" => 3.0,
+        "tachi" => 3.0,
+        "desu" => 200.0,
+        "tosuru" => 3.0,
+        "kurai" => 3.0,
+        "nai" => 5.0,
+        "kudasai" => 360.0,
+        "nade" => 3.0,
         _ => 0.0,
     }
 }
@@ -817,9 +894,7 @@ fn find_word_suffix_inner(
     for (suffix, keyword, kf) in suffixes {
         let suffix_class = kf
             .as_ref()
-            .and_then(|f| {
-                with_state(|s| s.class_by_seq.get(&f.row.seq).cloned()).flatten()
-            })
+            .and_then(|f| with_state(|s| s.class_by_seq.get(&f.row.seq).cloned()).flatten())
             .unwrap_or_else(|| keyword.clone());
         if !matches.is_empty() && SUFFIX_UNIQUE_ONLY.contains(&suffix_class.as_str()) {
             continue;
@@ -841,13 +916,17 @@ fn find_word_suffix_inner(
             let suffix_conj_ids: Option<Vec<i64>> = match &kf {
                 Some(f) if f.is_conj => {
                     let ids: Vec<i64> = conn
-                        .prepare("SELECT id FROM conjugation WHERE seq = ?1")
+                        .prepare_cached("SELECT id FROM conjugation WHERE seq = ?1")
                         .and_then(|mut st| {
                             st.query_map([f.row.seq], |r| r.get::<_, i64>(0))
                                 .map(|rows| rows.flatten().collect())
                         })
                         .unwrap_or_default();
-                    if ids.is_empty() { None } else { Some(ids) }
+                    if ids.is_empty() {
+                        None
+                    } else {
+                        Some(ids)
+                    }
                 }
                 _ => None,
             };
@@ -889,7 +968,10 @@ fn find_word_suffix_inner(
             // chau/to contraction kana fixup
             if keyword == "chau" || keyword == "to" {
                 if primary_kana.ends_with('て') || primary_kana.ends_with('で') {
-                    primary_kana = primary_kana.chars().take(primary_kana.chars().count() - 1).collect();
+                    primary_kana = primary_kana
+                        .chars()
+                        .take(primary_kana.chars().count() - 1)
+                        .collect();
                 }
                 suffix_kana = suffix.clone();
             }
@@ -946,19 +1028,21 @@ fn get_word_kana(conn: &Connection, w: &Word) -> String {
         if seq != 0 {
             if let Reading::Kanji(k) = reading {
                 // match on ord
-                if let Ok(kana) = conn.query_row(
-                    "SELECT text FROM kana_text WHERE seq = ?1 AND ord = ?2 LIMIT 1",
-                    rusqlite::params![seq, k.ord],
-                    |r| r.get::<_, String>(0),
-                ) {
+                if let Ok(kana) = conn
+                    .prepare_cached(
+                        "SELECT text FROM kana_text WHERE seq = ?1 AND ord = ?2 LIMIT 1",
+                    )
+                    .and_then(|mut s| {
+                        s.query_row(rusqlite::params![seq, k.ord], |r| r.get::<_, String>(0))
+                    })
+                {
                     return kana;
                 }
             }
-            if let Ok(kana) = conn.query_row(
-                "SELECT text FROM kana_text WHERE seq = ?1 LIMIT 1",
-                [seq],
-                |r| r.get::<_, String>(0),
-            ) {
+            if let Ok(kana) = conn
+                .prepare_cached("SELECT text FROM kana_text WHERE seq = ?1 LIMIT 1")
+                .and_then(|mut s| s.query_row([seq], |r| r.get::<_, String>(0)))
+            {
                 return kana;
             }
         }
