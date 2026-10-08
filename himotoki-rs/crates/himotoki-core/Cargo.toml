@@ -1,0 +1,16 @@
+[package]
+name = "himotoki-core"
+version = "0.3.2"
+edition = "2021"
+description = "Japanese morphological analyzer — Rust port of himotoki"
+license = "MIT"
+
+[dependencies]
+rusqlite = { workspace = true }
+fst = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+unicode-normalization = { workspace = true }
+indexmap = { workspace = true }
+rustc-hash = { workspace = true }
+anyhow = { workspace = true }

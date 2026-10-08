@@ -1,0 +1,16 @@
+[package]
+name = "xtask"
+version = "0.1.0"
+edition = "2021"
+description = "Dev automation: golden corpus checks, benchmarks"
+license = "MIT"
+
+[[bin]]
+name = "xtask"
+path = "src/main.rs"
+
+[dependencies]
+himotoki-core = { path = "../himotoki-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }

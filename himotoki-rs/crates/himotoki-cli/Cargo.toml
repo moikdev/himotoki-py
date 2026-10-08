@@ -1,0 +1,17 @@
+[package]
+name = "himotoki-cli"
+version = "0.3.2"
+edition = "2021"
+description = "CLI for himotoki Japanese morphological analyzer"
+license = "MIT"
+
+[[bin]]
+name = "himotoki"
+path = "src/main.rs"
+
+[dependencies]
+himotoki-core = { path = "../himotoki-core" }
+clap = { workspace = true }
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+rusqlite = { workspace = true }
