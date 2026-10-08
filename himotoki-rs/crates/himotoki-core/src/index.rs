@@ -66,7 +66,7 @@ fn build_from_db(conn: &rusqlite::Connection, fst_path: &Path) -> rusqlite::Resu
     }
     let builder = SetBuilder::memory();
     let mut builder = builder;
-    let mut iter = words.into_iter().peekable();
+    let iter = words.into_iter().peekable();
     // FST requires sorted insert — BTreeSet iteration is sorted.
     let mut keys = Vec::with_capacity(iter.len());
     for w in iter {
