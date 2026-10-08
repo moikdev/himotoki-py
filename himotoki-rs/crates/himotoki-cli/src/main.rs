@@ -69,6 +69,12 @@ enum Cmd {
         /// Max inputs to process
         #[arg(long)]
         limit: Option<usize>,
+        /// Timed rounds over the corpus
+        #[arg(long, default_value_t = 1)]
+        rounds: usize,
+        /// Write per-round per-input timings (ms) + peak RSS as JSON
+        #[arg(long)]
+        json_out: Option<PathBuf>,
     },
     /// Reproduce scripts/dump_gold.py output from golden inputs.jsonl.
     Dump {
@@ -112,7 +118,12 @@ fn main() -> anyhow::Result<()> {
                 }
             }
         }
-        Some(Cmd::Bench { inputs, limit }) => {
+        Some(Cmd::Bench {
+            inputs,
+            limit,
+            rounds,
+            json_out,
+        }) => {
             let f = BufReader::new(std::fs::File::open(inputs)?);
             let mut texts = Vec::new();
             for line in f.lines() {
@@ -128,20 +139,46 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
             }
-            let t0 = std::time::Instant::now();
             let mut nsegs = 0usize;
-            for t in &texts {
-                let paths = segment_text(&conn, t, index.as_ref(), 5);
-                nsegs += paths.len();
+            let mut round_times: Vec<Vec<f64>> = Vec::with_capacity(rounds);
+            for _ in 0..rounds {
+                let mut times = Vec::with_capacity(texts.len());
+                for t in &texts {
+                    let it = std::time::Instant::now();
+                    let paths = segment_text(&conn, t, index.as_ref(), 5);
+                    times.push(it.elapsed().as_secs_f64() * 1000.0);
+                    nsegs += paths.len();
+                }
+                round_times.push(times);
             }
-            let el = t0.elapsed();
+            let total: f64 = round_times.iter().flatten().sum();
             eprintln!(
-                "bench: {} inputs, {} paths, {:.3}s total, {:.1} ms/input",
+                "bench: {} inputs x {} rounds, {} paths, {:.3}s total, {:.1} ms/input",
                 texts.len(),
+                rounds,
                 nsegs,
-                el.as_secs_f64(),
-                el.as_secs_f64() * 1000.0 / texts.len() as f64
+                total / 1000.0,
+                total / (texts.len() * rounds) as f64
             );
+            if let Some(out) = json_out {
+                let peak_rss_kb = std::fs::read_to_string("/proc/self/status")
+                    .ok()
+                    .and_then(|s| {
+                        s.lines()
+                            .find(|l| l.starts_with("VmHWM"))
+                            .and_then(|l| l.split_whitespace().nth(1)?.parse::<u64>().ok())
+                    })
+                    .unwrap_or(0);
+                let js = serde_json::json!({
+                    "impl": "rust",
+                    "inputs": texts.len(),
+                    "rounds": rounds,
+                    "segments": nsegs,
+                    "per_input_ms": round_times,
+                    "peak_rss_mb": peak_rss_kb as f64 / 1024.0,
+                });
+                std::fs::write(out, serde_json::to_string(&js)?)?;
+            }
         }
         Some(Cmd::Dump {
             inputs,

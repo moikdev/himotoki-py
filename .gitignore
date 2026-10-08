@@ -87,3 +87,6 @@ check_*.py
 .env
 .chunkhound/
 himotoki.fst
+
+# Benchmark results
+out/
